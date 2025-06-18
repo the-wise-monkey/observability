@@ -60,5 +60,5 @@ services:
       - loki
 
 volumes:
-  metabase-data:
   loki-data:
+  metabase-data:
