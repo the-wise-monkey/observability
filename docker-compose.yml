@@ -22,7 +22,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
       # Mount a writable directory so the compactor can create /loki/index, /loki/boltdb-cache and /loki/chunks
-      - ./loki/data:/loki
+      - loki-data:/loki
       - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
 
   metabase:
@@ -61,3 +61,4 @@ services:
 
 volumes:
   metabase-data:
+  loki-data:
