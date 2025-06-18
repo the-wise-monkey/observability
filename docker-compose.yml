@@ -29,6 +29,7 @@ services:
     ports:
       - "3030:3000"
     environment:
+      - MB_DB_TYPE=${MB_DB_TYPE:-postgres}
       - MB_DB_CONNECTION_URI=${MB_DB_CONNECTION_URI}
       - MB_SITE_URL=http://localhost/metabase
     volumes:
