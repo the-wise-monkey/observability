@@ -33,8 +33,8 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$(pwd)
-ExecStart=/usr/bin/docker-compose up
-ExecStop=/usr/bin/docker-compose down
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
 Restart=on-failure
 RestartSec=10
 StartLimitIntervalSec=600
@@ -50,4 +50,15 @@ sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
-echo "Service $SERVICE_NAME is set up and running."
+# Get public IP
+PUBLIC_IP=$(curl -s ifconfig.me || curl -s ipinfo.io/ip || echo "<your-server-ip>")
+
+# Print access URLs
+cat <<EOF
+
+Service $SERVICE_NAME is set up and running.
+
+Access your services at:
+  Grafana:   http://$PUBLIC_IP/grafana
+  Metabase:  http://$PUBLIC_IP/metabase
+EOF
