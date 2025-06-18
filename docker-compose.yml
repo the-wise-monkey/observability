@@ -33,7 +33,7 @@ services:
     environment:
       - MB_DB_TYPE=${MB_DB_TYPE:-postgres}
       - MB_DB_CONNECTION_URI=${MB_DB_CONNECTION_URI}
-      - MB_SITE_URL=http://localhost/metabase
+      - MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
     volumes:
       - metabase-data:/metabase.db
     restart: unless-stopped

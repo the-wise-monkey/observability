@@ -9,7 +9,12 @@ SERVICE_NAME="observability"
 create_env() {
   echo "Creating .env file..."
   read -p "Enter Metabase Database connection URI: " MB_DB_CONNECTION_URI
-  echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\"" > "$ENV_FILE"
+  read -p "Enter Metabase Site URL (default: http://localhost/metabase): " MB_SITE_URL
+  MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
+  {
+    echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
+    echo "MB_SITE_URL=\"$MB_SITE_URL\""
+  } > "$ENV_FILE"
   echo ".env file created."
 }
 
