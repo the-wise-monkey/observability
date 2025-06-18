@@ -52,6 +52,8 @@ services:
     image: grafana/promtail:latest
     container_name: promtail
     restart: unless-stopped
+    ports:
+      - "9080:9080"
     volumes:
       - /var/log:/var/log:ro
       - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
