@@ -8,10 +8,8 @@ SERVICE_NAME="observability"
 # Function to prompt for env vars
 create_env() {
   echo "Creating .env file..."
-  read -p "Enter Metabase Database URL: " MB_DB_URL
-  read -p "Enter Metabase SSL Certificate Path: " MB_DB_SSL_CERT
-  echo "MB_DB_URL=\"$MB_DB_URL\"" > "$ENV_FILE"
-  echo "MB_DB_SSL_CERT=\"$MB_DB_SSL_CERT\"" >> "$ENV_FILE"
+  read -p "Enter Metabase Database connection URI: " MB_DB_CONNECTION_URI
+  echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\"" > "$ENV_FILE"
   echo ".env file created."
 }
 
