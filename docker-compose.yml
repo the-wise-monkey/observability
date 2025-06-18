@@ -29,7 +29,8 @@ services:
     ports:
       - "3030:3000"
     environment:
-      - MB_DB_FILE=/metabase.db/metabase.db
+      - MB_DB_URL
+      - MB_DB_SSL_CERT
       - MB_SITE_URL=http://localhost/metabase
     volumes:
       - metabase-data:/metabase.db
