@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=http://localhost/grafana
     depends_on:
       - loki
 
@@ -29,6 +30,7 @@ services:
       - "3030:3000"
     environment:
       - MB_DB_FILE=/metabase.db/metabase.db
+      - MB_SITE_URL=http://localhost/metabase
     volumes:
       - metabase-data:/metabase.db
     restart: unless-stopped
