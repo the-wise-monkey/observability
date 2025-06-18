@@ -54,7 +54,7 @@ sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
 # Get public IP
-PUBLIC_IP=$(curl -s ifconfig.me || curl -s ipinfo.io/ip || echo "<your-server-ip>")
+PUBLIC_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip || echo "<your-ipv4>")
 
 # Print access URLs
 cat <<EOF
