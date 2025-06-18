@@ -14,7 +14,7 @@ services:
       - loki
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:2.9.7
     ports:
       - "3100:3100"
     container_name: loki
@@ -29,8 +29,9 @@ services:
     ports:
       - "3030:3000"
     environment:
-      - MB_DB_URL
-      - MB_DB_SSL_CERT
+      - MB_DB_TYPE=${MB_DB_TYPE:-postgres}
+      - MB_DB_URL=${MB_DB_URL}
+      - MB_DB_SSL_CERT=${MB_DB_SSL_CERT}
       - MB_SITE_URL=http://localhost/metabase
     volumes:
       - metabase-data:/metabase.db
