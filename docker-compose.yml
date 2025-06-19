@@ -1,5 +1,13 @@
 version: '3.8'
 
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
 services:
   grafana:
     image: grafana/grafana-oss:latest
@@ -54,6 +62,8 @@ services:
     ports:
       - "9080:9080"
     volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - /var/log:/var/log:ro
       - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
     command: -config.file=/etc/promtail/config.yaml -config.expand-env=true
