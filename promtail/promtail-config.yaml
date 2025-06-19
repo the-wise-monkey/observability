@@ -1,6 +1,5 @@
 server:
   http_listen_port: 9080
-  http_path_prefix: /promtail
   grpc_listen_port: 0
 
 positions:
