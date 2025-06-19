@@ -8,12 +8,41 @@ SERVICE_NAME="observability"
 # Function to prompt for env vars
 create_env() {
   echo "Creating .env file..."
+  echo
+  
+  # Grafana configuration
+  echo "=== Grafana Configuration ==="
+  # Currently no specific env vars needed for Grafana
+  echo "Grafana will use default configuration."
+  echo
+  
+  # Metabase configuration
+  echo "=== Metabase Configuration ==="
   read -p "Enter Metabase Database connection URI: " MB_DB_CONNECTION_URI
   read -p "Enter Metabase Site URL (default: http://localhost/metabase): " MB_SITE_URL
   MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
+  echo
+  
+  # Promtail configuration (optional AWS credentials for CloudWatch)
+  echo "=== Promtail Configuration ==="
+  echo "Optional: Configure AWS credentials for CloudWatch log scraping"
+  read -p "Enter AWS Access Key ID (optional, press Enter to skip): " AWS_ACCESS_KEY_ID
+  read -p "Enter AWS Secret Access Key (optional, press Enter to skip): " AWS_SECRET_ACCESS_KEY
+  read -p "Enter AWS Region (optional, e.g., us-east-1, press Enter to skip): " AWS_REGION
+  echo
+  
+  # Write to .env file
   {
+    echo "# Metabase Configuration"
     echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
     echo "MB_SITE_URL=\"$MB_SITE_URL\""
+    echo
+    if [ -n "$AWS_ACCESS_KEY_ID" ] || [ -n "$AWS_SECRET_ACCESS_KEY" ] || [ -n "$AWS_REGION" ]; then
+      echo "# Promtail AWS Configuration (for CloudWatch scraping)"
+      [ -n "$AWS_ACCESS_KEY_ID" ] && echo "AWS_ACCESS_KEY_ID=\"$AWS_ACCESS_KEY_ID\""
+      [ -n "$AWS_SECRET_ACCESS_KEY" ] && echo "AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET_ACCESS_KEY\""
+      [ -n "$AWS_REGION" ] && echo "AWS_REGION=\"$AWS_REGION\""
+    fi
   } > "$ENV_FILE"
   echo ".env file created."
 }
