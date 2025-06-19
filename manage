@@ -260,8 +260,8 @@ mount_s3_bucket() {
     # Construct s3fs bucket path
     local bucket_path="$bucket"
     if [ -n "$prefix" ]; then
-        # Remove leading/trailing slashes from prefix
-        prefix=$(echo "$prefix" | sed 's|^/||' | sed 's|/$||')
+        # Ensure prefix starts with / and remove trailing slash
+        prefix=$(echo "$prefix" | sed 's|^/*|/|' | sed 's|/$||')
         bucket_path="$bucket:$prefix"
     fi
     
@@ -444,7 +444,8 @@ with open('$CONFIG_FILE', 'w') as f:
     # Construct new bucket path
     local bucket_path="$bucket"
     if [ -n "$prefix" ]; then
-        prefix=$(echo "$prefix" | sed 's|^/||' | sed 's|/$||')
+        # Ensure prefix starts with / and remove trailing slash
+        prefix=$(echo "$prefix" | sed 's|^/*|/|' | sed 's|/$||')
         bucket_path="$bucket:$prefix"
     fi
     
