@@ -20,15 +20,3 @@ scrape_configs:
       - timestamp:
           source: timestamp
           format: RFC3339
-
-  - job_name: s3_logs
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: s3-logs
-          __path__: /mnt/s3-logs/**/*.log
-    pipeline_stages:
-      - timestamp:
-          source: timestamp
-          format: RFC3339
