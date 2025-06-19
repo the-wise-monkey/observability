@@ -16,4 +16,11 @@ scrape_configs:
         grpc_listen_port: 0
       labels:
         pushserver: "push"
-      url: http://loki:3100/loki/api/v1/push
+  # Include existing file scraping config (based on logs showing /var/log/*log scraping)
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*log

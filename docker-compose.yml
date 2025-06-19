@@ -21,7 +21,6 @@ services:
     restart: unless-stopped
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
-      # Mount a writable directory so the compactor can create /loki/index, /loki/boltdb-cache and /loki/chunks
       - loki-data:/loki
       - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
 
@@ -54,7 +53,7 @@ services:
     restart: unless-stopped
     ports:
       - "9080:9080"
-      - "9081:9081"
+      - "9081:9081"  # Added for loki_push_api
     volumes:
       - /var/log:/var/log:ro
       - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
