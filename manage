@@ -1,0 +1,477 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Colors for better UX
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+ENV_FILE=".env"
+SERVICE_NAME="observability"
+CONFIG_FILE="promtail/promtail-config.yaml"
+TEMP_FILE=$(mktemp)
+
+# Function to print colored header
+print_header() {
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN}     Observability Stack Manager       ${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo
+}
+
+# Function to prompt for env vars (from original setup.sh)
+create_env() {
+    echo -e "${GREEN}Creating .env file...${NC}"
+    echo
+    
+    # Grafana configuration
+    echo -e "${BLUE}=== Grafana Configuration ===${NC}"
+    echo -e "${YELLOW}Grafana will use default configuration.${NC}"
+    echo
+    
+    # Metabase configuration
+    echo -e "${BLUE}=== Metabase Configuration ===${NC}"
+    read -p "Enter Metabase Database connection URI: " MB_DB_CONNECTION_URI
+    read -p "Enter Metabase Site URL (default: http://localhost/metabase): " MB_SITE_URL
+    MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
+    echo
+    
+    # Promtail configuration (optional S3 logs configuration)
+    echo -e "${BLUE}=== Promtail Configuration ===${NC}"
+    echo -e "${YELLOW}Optional: Configure S3 logs bucket for log scraping${NC}"
+    read -p "Enter S3 Logs Bucket Name (optional, press Enter to skip): " S3_LOGS_BUCKET_NAME
+    read -p "Enter S3 Logs Prefix (optional, press Enter to skip): " S3_LOGS_PREFIX
+    echo
+    
+    # Write to .env file
+    {
+        echo "# Metabase Configuration"
+        echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
+        echo "MB_SITE_URL=\"$MB_SITE_URL\""
+        echo
+        if [ -n "$S3_LOGS_BUCKET_NAME" ] || [ -n "$S3_LOGS_PREFIX" ]; then
+            echo "# Promtail S3 Configuration (for S3 log scraping)"
+            [ -n "$S3_LOGS_BUCKET_NAME" ] && echo "S3_LOGS_BUCKET_NAME=\"$S3_LOGS_BUCKET_NAME\""
+            [ -n "$S3_LOGS_PREFIX" ] && echo "S3_LOGS_PREFIX=\"$S3_LOGS_PREFIX\""
+        fi
+    } > "$ENV_FILE"
+    echo -e "${GREEN}.env file created.${NC}"
+}
+
+# Function to set up systemd service (from original setup.sh)
+setup_systemd_service() {
+    echo -e "${BLUE}Setting up systemd service...${NC}"
+    
+    # Create systemd service file
+    SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+
+    sudo bash -c "cat > $SERVICE_FILE" <<EOL
+[Unit]
+Description=Observability Docker Compose Stack
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$(pwd)
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=600
+StartLimitBurst=3
+EnvironmentFile=$(pwd)/.env
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+    echo -e "${BLUE}Reloading systemd daemon and enabling service...${NC}"
+    sudo systemctl daemon-reload
+    sudo systemctl enable $SERVICE_NAME
+    sudo systemctl restart $SERVICE_NAME
+
+    # Get public IP
+    PUBLIC_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip || echo "<your-ipv4>")
+
+    # Print access URLs
+    cat <<EOF
+
+${GREEN}Service $SERVICE_NAME is set up and running.${NC}
+
+${CYAN}Access your services at:${NC}
+  ${YELLOW}Grafana:   http://$PUBLIC_IP/grafana${NC}
+  ${YELLOW}Metabase:  http://$PUBLIC_IP/metabase${NC}
+EOF
+}
+
+# Function to show current S3 configs
+show_s3_configs() {
+    echo -e "${BLUE}Current S3 Log Configurations:${NC}"
+    echo -e "${BLUE}================================${NC}"
+    
+    # Check if config file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}Error: Promtail configuration file not found at $CONFIG_FILE${NC}"
+        return 1
+    fi
+    
+    # Extract s3 job names from config
+    local s3_jobs=$(grep -n "job_name:.*s3" "$CONFIG_FILE" 2>/dev/null | cut -d: -f3 | sed 's/^ *//' || echo "")
+    
+    if [ -z "$s3_jobs" ]; then
+        echo -e "${YELLOW}No S3 log configurations found.${NC}"
+        echo
+        return 1
+    else
+        local index=1
+        while IFS= read -r job; do
+            echo -e "${GREEN}$index.${NC} $job"
+            ((index++))
+        done <<< "$s3_jobs"
+        echo
+        return 0
+    fi
+}
+
+# Function to get S3 job template
+get_s3_template() {
+    local job_name="$1"
+    local bucket="$2"
+    local prefix="$3"
+    local poll_interval="${4:-5s}"
+    
+    cat <<EOF
+  - job_name: $job_name
+    s3:
+      bucket: $bucket
+      prefix: $prefix
+      poll_interval: $poll_interval
+    pipeline_stages:
+      - json:
+          expressions:
+            timestamp: time
+            message: msg
+            level: level
+      - timestamp:
+          source: timestamp
+          format: RFC3339
+      - labels:
+          job: "s3_logs"
+          bucket: $bucket
+          level:
+      - output:
+          source: message
+EOF
+}
+
+# Function to add new S3 config
+add_s3_config() {
+    echo -e "${GREEN}Adding New S3 Log Configuration${NC}"
+    echo -e "${GREEN}================================${NC}"
+    
+    read -p "Enter job name (e.g., s3_app_logs): " job_name
+    read -p "Enter S3 bucket name: " bucket
+    read -p "Enter S3 prefix (e.g., logs/app/): " prefix
+    read -p "Enter poll interval (default: 5s): " poll_interval
+    poll_interval=${poll_interval:-5s}
+    
+    # Validate inputs
+    if [ -z "$job_name" ] || [ -z "$bucket" ] || [ -z "$prefix" ]; then
+        echo -e "${RED}Error: Job name, bucket, and prefix are required.${NC}"
+        return 1
+    fi
+    
+    # Check if job name already exists
+    if grep -q "job_name: $job_name" "$CONFIG_FILE"; then
+        echo -e "${RED}Error: Job name '$job_name' already exists.${NC}"
+        return 1
+    fi
+    
+    # Create the new config
+    local new_config=$(get_s3_template "$job_name" "$bucket" "$prefix" "$poll_interval")
+    
+    # Add to config file (before the last line if it exists, or append)
+    if [ -s "$CONFIG_FILE" ]; then
+        # Insert before the last line or append
+        sed '$i\
+'"$new_config"'
+' "$CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$CONFIG_FILE"
+    else
+        echo "$new_config" >> "$CONFIG_FILE"
+    fi
+    
+    echo -e "${GREEN}✓ S3 log configuration '$job_name' added successfully!${NC}"
+    echo
+}
+
+# Function to remove S3 config
+remove_s3_config() {
+    if ! show_s3_configs; then
+        return 1
+    fi
+    
+    echo -e "${YELLOW}Remove S3 Log Configuration${NC}"
+    echo -e "${YELLOW}=============================${NC}"
+    
+    read -p "Enter the job name to remove: " job_name
+    
+    if [ -z "$job_name" ]; then
+        echo -e "${RED}Error: Job name is required.${NC}"
+        return 1
+    fi
+    
+    # Check if job exists
+    if ! grep -q "job_name: $job_name" "$CONFIG_FILE"; then
+        echo -e "${RED}Error: Job '$job_name' not found.${NC}"
+        return 1
+    fi
+    
+    # Confirm deletion
+    echo -e "${YELLOW}Are you sure you want to remove '$job_name'? (y/N)${NC}"
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Operation cancelled.${NC}"
+        return 0
+    fi
+    
+    # Remove the job configuration (from job_name line to the next job_name or end)
+    python3 -c "
+import re
+import sys
+
+with open('$CONFIG_FILE', 'r') as f:
+    content = f.read()
+
+# Pattern to match the specific job and its configuration
+pattern = r'  - job_name: $job_name\n(.*?)(?=  - job_name:|$)'
+result = re.sub(pattern, '', content, flags=re.DOTALL)
+
+with open('$CONFIG_FILE', 'w') as f:
+    f.write(result)
+"
+    
+    echo -e "${GREEN}✓ S3 log configuration '$job_name' removed successfully!${NC}"
+    echo
+}
+
+# Function to edit existing S3 config
+edit_s3_config() {
+    if ! show_s3_configs; then
+        return 1
+    fi
+    
+    echo -e "${PURPLE}Edit S3 Log Configuration${NC}"
+    echo -e "${PURPLE}==========================${NC}"
+    
+    read -p "Enter the job name to edit: " job_name
+    
+    if [ -z "$job_name" ]; then
+        echo -e "${RED}Error: Job name is required.${NC}"
+        return 1
+    fi
+    
+    # Check if job exists
+    if ! grep -q "job_name: $job_name" "$CONFIG_FILE"; then
+        echo -e "${RED}Error: Job '$job_name' not found.${NC}"
+        return 1
+    fi
+    
+    # Get current values
+    local current_bucket=$(grep -A 10 "job_name: $job_name" "$CONFIG_FILE" | grep "bucket:" | head -1 | sed 's/.*bucket: *//')
+    local current_prefix=$(grep -A 10 "job_name: $job_name" "$CONFIG_FILE" | grep "prefix:" | head -1 | sed 's/.*prefix: *//')
+    local current_poll=$(grep -A 10 "job_name: $job_name" "$CONFIG_FILE" | grep "poll_interval:" | head -1 | sed 's/.*poll_interval: *//')
+    
+    echo -e "${BLUE}Current configuration for '$job_name':${NC}"
+    echo -e "  Bucket: ${YELLOW}$current_bucket${NC}"
+    echo -e "  Prefix: ${YELLOW}$current_prefix${NC}"
+    echo -e "  Poll Interval: ${YELLOW}$current_poll${NC}"
+    echo
+    
+    # Get new values
+    read -p "Enter new S3 bucket name (current: $current_bucket): " new_bucket
+    read -p "Enter new S3 prefix (current: $current_prefix): " new_prefix
+    read -p "Enter new poll interval (current: $current_poll): " new_poll
+    
+    # Use current values if new ones are empty
+    new_bucket=${new_bucket:-$current_bucket}
+    new_prefix=${new_prefix:-$current_prefix}
+    new_poll=${new_poll:-$current_poll}
+    
+    # Remove old config and add new one
+    python3 -c "
+import re
+import sys
+
+with open('$CONFIG_FILE', 'r') as f:
+    content = f.read()
+
+# Remove the old configuration
+pattern = r'  - job_name: $job_name\n(.*?)(?=  - job_name:|$)'
+content = re.sub(pattern, '', content, flags=re.DOTALL)
+
+with open('$CONFIG_FILE', 'w') as f:
+    f.write(content)
+"
+    
+    # Add the updated config
+    local updated_config=$(get_s3_template "$job_name" "$new_bucket" "$new_prefix" "$new_poll")
+    
+    if [ -s "$CONFIG_FILE" ]; then
+        sed '$i\
+'"$updated_config"'
+' "$CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$CONFIG_FILE"
+    else
+        echo "$updated_config" >> "$CONFIG_FILE"
+    fi
+    
+    echo -e "${GREEN}✓ S3 log configuration '$job_name' updated successfully!${NC}"
+    echo
+}
+
+# S3 logs management menu
+s3_logs_menu() {
+    while true; do
+        echo -e "${CYAN}S3 Logs Management${NC}"
+        echo -e "${CYAN}==================${NC}"
+        echo -e "${GREEN}1.${NC} View current S3 log configurations"
+        echo -e "${GREEN}2.${NC} Add new S3 log configuration"
+        echo -e "${GREEN}3.${NC} Edit existing S3 log configuration"
+        echo -e "${GREEN}4.${NC} Remove S3 log configuration"
+        echo -e "${GREEN}5.${NC} Back to main menu"
+        echo
+        
+        read -p "Enter your choice (1-5): " s3_choice
+        echo
+        
+        case $s3_choice in
+            1)
+                show_s3_configs
+                ;;
+            2)
+                add_s3_config
+                ;;
+            3)
+                edit_s3_config
+                ;;
+            4)
+                remove_s3_config
+                ;;
+            5)
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Please select 1-5.${NC}"
+                echo
+                ;;
+        esac
+        
+        # Pause before showing menu again
+        read -p "Press Enter to continue..."
+        echo
+    done
+}
+
+# Loki configuration menu
+loki_config_menu() {
+    while true; do
+        echo -e "${CYAN}Configure Loki${NC}"
+        echo -e "${CYAN}==============${NC}"
+        echo -e "${GREEN}1.${NC} Manage S3 Log Scrapers"
+        echo -e "${GREEN}2.${NC} Back to main menu"
+        echo
+        
+        read -p "Enter your choice (1-2): " loki_choice
+        echo
+        
+        case $loki_choice in
+            1)
+                s3_logs_menu
+                ;;
+            2)
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Please select 1-2.${NC}"
+                echo
+                ;;
+        esac
+    done
+}
+
+# Main menu for existing setup
+main_menu() {
+    while true; do
+        print_header
+        echo -e "${CYAN}Configuration Options:${NC}"
+        echo -e "${GREEN}1.${NC} Configure Loki"
+        echo -e "${GREEN}2.${NC} Exit"
+        echo
+        
+        read -p "Enter your choice (1-2): " main_choice
+        echo
+        
+        case $main_choice in
+            1)
+                loki_config_menu
+                ;;
+            2)
+                echo -e "${GREEN}Goodbye!${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Please select 1-2.${NC}"
+                echo
+                ;;
+        esac
+    done
+}
+
+# Initial setup workflow
+initial_setup() {
+    print_header
+    echo -e "${YELLOW}Welcome! This appears to be your first time running the Observability Stack.${NC}"
+    echo -e "${YELLOW}Let's set up your environment...${NC}"
+    echo
+    
+    # Create .env file
+    create_env
+    echo
+    
+    # Set up systemd service
+    setup_systemd_service
+    echo
+    
+    echo -e "${GREEN}Initial setup completed successfully!${NC}"
+    echo -e "${BLUE}You can run this script again to manage your configuration.${NC}"
+    echo
+}
+
+# Cleanup function
+cleanup() {
+    [ -f "$TEMP_FILE" ] && rm -f "$TEMP_FILE"
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
+
+# Main execution logic
+main() {
+    clear
+    
+    # Check if .env file exists
+    if [ ! -f "$ENV_FILE" ]; then
+        # First run - do initial setup
+        initial_setup
+    else
+        # .env exists - show main menu
+        main_menu
+    fi
+}
+
+# Start the script
+main 
