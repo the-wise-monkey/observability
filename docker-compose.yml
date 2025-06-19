@@ -54,6 +54,7 @@ services:
     restart: unless-stopped
     ports:
       - "9080:9080"
+      - "9081:9081"
     volumes:
       - /var/log:/var/log:ro
       - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
