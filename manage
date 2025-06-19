@@ -41,11 +41,13 @@ create_env() {
     MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
     echo
     
-    # Promtail configuration (optional S3 logs configuration)
-    echo -e "${BLUE}=== Promtail Configuration ===${NC}"
-    echo -e "${YELLOW}Optional: Configure S3 logs bucket for log scraping${NC}"
-    read -p "Enter S3 Logs Bucket Name (optional, press Enter to skip): " S3_LOGS_BUCKET_NAME
-    read -p "Enter S3 Logs Prefix (optional, press Enter to skip): " S3_LOGS_PREFIX
+    # AWS configuration (for S3 bucket mounting)
+    echo -e "${BLUE}=== AWS Configuration ===${NC}"
+    echo -e "${YELLOW}Configure AWS credentials for S3 bucket mounting${NC}"
+    read -p "Enter AWS Access Key ID: " AWS_ACCESS_KEY_ID
+    read -p "Enter AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
+    read -p "Enter AWS Region (default: us-east-1): " AWS_REGION
+    AWS_REGION=${AWS_REGION:-us-east-1}
     echo
     
     # Write to .env file
@@ -54,11 +56,10 @@ create_env() {
         echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
         echo "MB_SITE_URL=\"$MB_SITE_URL\""
         echo
-        if [ -n "$S3_LOGS_BUCKET_NAME" ] || [ -n "$S3_LOGS_PREFIX" ]; then
-            echo "# Promtail S3 Configuration (for S3 log scraping)"
-            [ -n "$S3_LOGS_BUCKET_NAME" ] && echo "S3_LOGS_BUCKET_NAME=\"$S3_LOGS_BUCKET_NAME\""
-            [ -n "$S3_LOGS_PREFIX" ] && echo "S3_LOGS_PREFIX=\"$S3_LOGS_PREFIX\""
-        fi
+        echo "# AWS Configuration (for S3 bucket mounting)"
+        echo "AWS_ACCESS_KEY_ID=\"$AWS_ACCESS_KEY_ID\""
+        echo "AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET_ACCESS_KEY\""
+        echo "AWS_REGION=\"$AWS_REGION\""
     } > "$ENV_FILE"
     echo -e "${GREEN}.env file created.${NC}"
 }
@@ -241,19 +242,19 @@ mount_s3_bucket() {
     local mount_path="/mnt/s3-logs/$mount_name"
     sudo mkdir -p "$mount_path"
     
-    # Get AWS credentials if not in environment or credentials file
+    # Check for AWS credentials from environment variables
     local creds_file="$HOME/.passwd-s3fs"
-    if [ ! -f "$creds_file" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
-        echo -e "${YELLOW}AWS credentials needed for s3fs mounting.${NC}"
-        read -p "Enter AWS Access Key ID: " aws_access_key
-        read -p "Enter AWS Secret Access Key: " aws_secret_key
-        
-        if [ -n "$aws_access_key" ] && [ -n "$aws_secret_key" ]; then
-            create_s3fs_credentials "$aws_access_key" "$aws_secret_key"
+    if [ ! -f "$creds_file" ]; then
+        if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo -e "${GREEN}✓ Using AWS credentials from environment variables.${NC}"
+            create_s3fs_credentials "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
         else
-            echo -e "${RED}Error: AWS credentials are required.${NC}"
+            echo -e "${RED}Error: AWS credentials not found in environment variables.${NC}"
+            echo -e "${YELLOW}Please run the initial setup to configure AWS credentials.${NC}"
             return 1
         fi
+    else
+        echo -e "${GREEN}✓ Using existing AWS credentials file.${NC}"
     fi
     
     # Construct s3fs bucket path
@@ -267,7 +268,17 @@ mount_s3_bucket() {
     # Mount the S3 bucket
     echo -e "${BLUE}Mounting S3 bucket: $bucket_path -> $mount_path${NC}"
     
-    local mount_opts="allow_other,use_cache=/tmp/s3fs-cache,uid=$(id -u),gid=$(id -g)"
+    # Set AWS region from environment variables
+    local aws_region="${AWS_DEFAULT_REGION:-${AWS_REGION:-us-east-1}}"
+    echo -e "${BLUE}Using AWS region: $aws_region${NC}"
+    
+    # Construct S3 endpoint URL for the region
+    local s3_endpoint="https://s3.$aws_region.amazonaws.com"
+    if [ "$aws_region" = "us-east-1" ]; then
+        s3_endpoint="https://s3.amazonaws.com"
+    fi
+    
+    local mount_opts="allow_other,use_cache=/tmp/s3fs-cache,uid=$(id -u),gid=$(id -g),url=$s3_endpoint"
     if sudo s3fs "$bucket_path" "$mount_path" -o "$mount_opts"; then
         echo -e "${GREEN}✓ S3 bucket mounted successfully!${NC}"
         
@@ -439,7 +450,18 @@ with open('$CONFIG_FILE', 'w') as f:
     
     # Remount with new settings
     echo -e "${BLUE}Remounting with new settings: $bucket_path -> $mount_path${NC}"
-    local mount_opts="allow_other,use_cache=/tmp/s3fs-cache,uid=$(id -u),gid=$(id -g)"
+    
+    # Set AWS region from environment variables
+    local aws_region="${AWS_DEFAULT_REGION:-${AWS_REGION:-us-east-1}}"
+    echo -e "${BLUE}Using AWS region: $aws_region${NC}"
+    
+    # Construct S3 endpoint URL for the region
+    local s3_endpoint="https://s3.$aws_region.amazonaws.com"
+    if [ "$aws_region" = "us-east-1" ]; then
+        s3_endpoint="https://s3.amazonaws.com"
+    fi
+    
+    local mount_opts="allow_other,use_cache=/tmp/s3fs-cache,uid=$(id -u),gid=$(id -g),url=$s3_endpoint"
     
     if sudo s3fs "$bucket_path" "$mount_path" -o "$mount_opts"; then
         echo -e "${GREEN}✓ S3 bucket remounted successfully!${NC}"
@@ -599,7 +621,11 @@ main() {
         # First run - do initial setup
         initial_setup
     else
-        # .env exists - show main menu
+        # .env exists - source it for environment variables and show main menu
+        echo -e "${BLUE}Loading environment variables from .env file...${NC}"
+        set -a  # automatically export all variables
+        source "$ENV_FILE"
+        set +a  # stop automatically exporting
         main_menu
     fi
 }
