@@ -20,3 +20,24 @@ scrape_configs:
        - timestamp:
            source: timestamp
            format: RFC3339
+
+  - job_name: s3_logs
+    s3:
+      bucket: ${S3_LOGS_BUCKET_NAME}          # Environment variable for bucket
+      prefix: ${S3_LOGS_PREFIX}               # Environment variable for prefix
+      poll_interval: 5s
+    pipeline_stages:
+      - json:
+          expressions:
+            timestamp: time
+            message: msg
+            level: level
+      - timestamp:
+          source: timestamp
+          format: RFC3339
+      - labels:
+          job: "s3_logs"
+          bucket: ${S3_LOGS_BUCKET_NAME}      # Reuse bucket name in labels
+          level:
+      - output:
+          source: message

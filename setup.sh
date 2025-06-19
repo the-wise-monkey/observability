@@ -23,12 +23,11 @@ create_env() {
   MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
   echo
   
-  # Promtail configuration (optional AWS credentials for CloudWatch)
+  # Promtail configuration (optional S3 logs configuration)
   echo "=== Promtail Configuration ==="
-  echo "Optional: Configure AWS credentials for CloudWatch log scraping"
-  read -p "Enter AWS Access Key ID (optional, press Enter to skip): " AWS_ACCESS_KEY_ID
-  read -p "Enter AWS Secret Access Key (optional, press Enter to skip): " AWS_SECRET_ACCESS_KEY
-  read -p "Enter AWS Region (optional, e.g., us-east-1, press Enter to skip): " AWS_REGION
+  echo "Optional: Configure S3 logs bucket for log scraping"
+  read -p "Enter S3 Logs Bucket Name (optional, press Enter to skip): " S3_LOGS_BUCKET_NAME
+  read -p "Enter S3 Logs Prefix (optional, press Enter to skip): " S3_LOGS_PREFIX
   echo
   
   # Write to .env file
@@ -37,11 +36,10 @@ create_env() {
     echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
     echo "MB_SITE_URL=\"$MB_SITE_URL\""
     echo
-    if [ -n "$AWS_ACCESS_KEY_ID" ] || [ -n "$AWS_SECRET_ACCESS_KEY" ] || [ -n "$AWS_REGION" ]; then
-      echo "# Promtail AWS Configuration (for CloudWatch scraping)"
-      [ -n "$AWS_ACCESS_KEY_ID" ] && echo "AWS_ACCESS_KEY_ID=\"$AWS_ACCESS_KEY_ID\""
-      [ -n "$AWS_SECRET_ACCESS_KEY" ] && echo "AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET_ACCESS_KEY\""
-      [ -n "$AWS_REGION" ] && echo "AWS_REGION=\"$AWS_REGION\""
+    if [ -n "$S3_LOGS_BUCKET_NAME" ] || [ -n "$S3_LOGS_PREFIX" ]; then
+      echo "# Promtail S3 Configuration (for S3 log scraping)"
+      [ -n "$S3_LOGS_BUCKET_NAME" ] && echo "S3_LOGS_BUCKET_NAME=\"$S3_LOGS_BUCKET_NAME\""
+      [ -n "$S3_LOGS_PREFIX" ] && echo "S3_LOGS_PREFIX=\"$S3_LOGS_PREFIX\""
     fi
   } > "$ENV_FILE"
   echo ".env file created."
