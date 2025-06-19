@@ -10,17 +10,11 @@ clients:
 
 scrape_configs:
   - job_name: push
-    loki_push_api:
-      server:
-        http_listen_port: 9081
-        grpc_listen_port: 0
-      labels:
-        pushserver: "push"
-  # Include existing file scraping config (based on logs showing /var/log/*log scraping)
-  - job_name: system
     static_configs:
       - targets:
           - localhost
         labels:
-          job: varlogs
+          job: push
           __path__: /var/log/*log
+    pipeline_stages:
+      - docker: {}
