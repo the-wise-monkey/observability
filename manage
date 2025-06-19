@@ -195,15 +195,8 @@ add_s3_config() {
     # Create the new config
     local new_config=$(get_s3_template "$job_name" "$bucket" "$prefix" "$poll_interval")
     
-    # Add to config file (before the last line if it exists, or append)
-    if [ -s "$CONFIG_FILE" ]; then
-        # Insert before the last line or append
-        sed '$i\
-'"$new_config"'
-' "$CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$CONFIG_FILE"
-    else
-        echo "$new_config" >> "$CONFIG_FILE"
-    fi
+    # Add to config file (append to the end)
+    echo "$new_config" >> "$CONFIG_FILE"
     
     echo -e "${GREEN}✓ S3 log configuration '$job_name' added successfully!${NC}"
     echo
@@ -321,13 +314,8 @@ with open('$CONFIG_FILE', 'w') as f:
     # Add the updated config
     local updated_config=$(get_s3_template "$job_name" "$new_bucket" "$new_prefix" "$new_poll")
     
-    if [ -s "$CONFIG_FILE" ]; then
-        sed '$i\
-'"$updated_config"'
-' "$CONFIG_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$CONFIG_FILE"
-    else
-        echo "$updated_config" >> "$CONFIG_FILE"
-    fi
+    # Append the updated config to the file
+    echo "$updated_config" >> "$CONFIG_FILE"
     
     echo -e "${GREEN}✓ S3 log configuration '$job_name' updated successfully!${NC}"
     echo
