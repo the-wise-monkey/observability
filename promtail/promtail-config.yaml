@@ -9,7 +9,28 @@ clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: docker
+  - job_name: cloudwatch
+    cloudwatch:
+      log_group_names:
+        - /aws/elasticbeanstalk/*/var/log/nginx/error.log
+        - /aws/elasticbeanstalk/*/var/log/nginx/access.log
+        - /aws/elasticbeanstalk/*/var/log/eb-engine.log
+        # Add other log files as needed
+      # Optional: Poll interval for fetching logs (default: 60s)
+      poll_interval: 5s
+      # Optional: Filter by log stream prefix if needed
+      # log_stream_name_prefix: <prefix>
+    relabel_configs:
+      - source_labels: [__meta_cloudwatch_logs_log_group]
+        target_label: log_group
+      - source_labels: [__meta_cloudwatch_logs_log_stream]
+        target_label: log_stream
+      - source_labels: [__meta_cloudwatch_logs_log_group]
+        regex: /aws/elasticbeanstalk/([^/]+)/.*
+        replacement: $1
+        target_label: environment
+
+  - job_name: push_api
     loki_push_api:
       server:
         http_listen_port: 1515
