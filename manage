@@ -109,48 +109,98 @@ ${CYAN}Access your services at:${NC}
 EOF
 }
 
-# Function to show current S3 configs
-show_s3_configs() {
-    echo -e "${BLUE}Current S3 Log Configurations:${NC}"
-    echo -e "${BLUE}================================${NC}"
-    
-    # Check if config file exists
-    if [ ! -f "$CONFIG_FILE" ]; then
-        echo -e "${RED}Error: Promtail configuration file not found at $CONFIG_FILE${NC}"
-        return 1
+# Function to check if s3fs is installed
+check_s3fs() {
+    if ! command -v s3fs &> /dev/null; then
+        echo -e "${YELLOW}s3fs is not installed. Installing...${NC}"
+        
+        # Detect OS and install s3fs
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            if command -v apt &> /dev/null; then
+                sudo apt update && sudo apt install -y s3fs
+            elif command -v yum &> /dev/null; then
+                sudo yum install -y s3fs-fuse
+            elif command -v dnf &> /dev/null; then
+                sudo dnf install -y s3fs-fuse
+            else
+                echo -e "${RED}Error: Cannot install s3fs automatically. Please install it manually.${NC}"
+                return 1
+            fi
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            if command -v brew &> /dev/null; then
+                brew install s3fs
+            else
+                echo -e "${RED}Error: Homebrew not found. Please install s3fs manually: brew install s3fs${NC}"
+                return 1
+            fi
+        else
+            echo -e "${RED}Error: Unsupported OS. Please install s3fs manually.${NC}"
+            return 1
+        fi
+        
+        echo -e "${GREEN}✓ s3fs installed successfully!${NC}"
+    else
+        echo -e "${GREEN}✓ s3fs is already installed.${NC}"
     fi
+}
+
+# Function to show current S3 mounts
+show_s3_mounts() {
+    echo -e "${BLUE}Current S3 Bucket Mounts:${NC}"
+    echo -e "${BLUE}==========================${NC}"
     
-    # Extract s3 job names from config
-    local s3_jobs=$(grep -n "job_name:.*s3" "$CONFIG_FILE" 2>/dev/null | cut -d: -f3 | sed 's/^ *//' || echo "")
+    # Check for mounted s3fs filesystems
+    local s3_mounts=$(mount | grep s3fs | awk '{print $1 " -> " $3}' || echo "")
     
-    if [ -z "$s3_jobs" ]; then
-        echo -e "${YELLOW}No S3 log configurations found.${NC}"
+    if [ -z "$s3_mounts" ]; then
+        echo -e "${YELLOW}No S3 buckets are currently mounted.${NC}"
+        echo
+        
+        # Check for mount points directory
+        if [ -d "/mnt/s3-logs" ]; then
+            echo -e "${BLUE}Available mount point directories:${NC}"
+            ls -la /mnt/s3-logs/ 2>/dev/null | grep "^d" | awk '{print "  " $9}' | grep -v "^\.$\|^\.\.$" || echo -e "${YELLOW}  No mount directories found.${NC}"
+        fi
         echo
         return 1
     else
         local index=1
-        while IFS= read -r job; do
-            echo -e "${GREEN}$index.${NC} $job"
+        while IFS= read -r mount; do
+            echo -e "${GREEN}$index.${NC} $mount"
             ((index++))
-        done <<< "$s3_jobs"
+        done <<< "$s3_mounts"
         echo
         return 0
     fi
 }
 
-# Function to get S3 job template
-get_s3_template() {
+# Function to create credentials file for s3fs
+create_s3fs_credentials() {
+    local access_key="$1"
+    local secret_key="$2"
+    local creds_file="$HOME/.passwd-s3fs"
+    
+    # Create credentials file
+    echo "$access_key:$secret_key" > "$creds_file"
+    chmod 600 "$creds_file"
+    echo -e "${GREEN}✓ S3 credentials file created at $creds_file${NC}"
+}
+
+# Function to get Promtail job template for mounted S3 logs
+get_promtail_s3_template() {
     local job_name="$1"
-    local bucket="$2"
-    local prefix="$3"
-    local poll_interval="${4:-5s}"
+    local mount_path="$2"
+    local log_pattern="${3:-**/*.log}"
     
     cat <<EOF
   - job_name: $job_name
-    s3:
-      bucket: $bucket
-      prefix: $prefix
-      poll_interval: $poll_interval
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: "s3_logs"
+          source: "$job_name"
+          __path__: "$mount_path/$log_pattern"
     pipeline_stages:
       - json:
           expressions:
@@ -161,79 +211,137 @@ get_s3_template() {
           source: timestamp
           format: RFC3339
       - labels:
-          job: "s3_logs"
-          bucket: $bucket
           level:
       - output:
           source: message
 EOF
 }
 
-# Function to add new S3 config
-add_s3_config() {
-    echo -e "${GREEN}Adding New S3 Log Configuration${NC}"
-    echo -e "${GREEN}================================${NC}"
+# Function to mount S3 bucket
+mount_s3_bucket() {
+    echo -e "${GREEN}Mount New S3 Bucket${NC}"
+    echo -e "${GREEN}===================${NC}"
     
-    read -p "Enter job name (e.g., s3_app_logs): " job_name
+    # Check if s3fs is installed
+    check_s3fs || return 1
+    
+    read -p "Enter mount name (e.g., app_logs): " mount_name
     read -p "Enter S3 bucket name: " bucket
-    read -p "Enter S3 prefix (e.g., logs/app/): " prefix
-    read -p "Enter poll interval (default: 5s): " poll_interval
-    poll_interval=${poll_interval:-5s}
+    read -p "Enter S3 bucket prefix/path (optional, e.g., logs/app/): " prefix
+    read -p "Enter log file pattern (default: **/*.log): " log_pattern
+    log_pattern=${log_pattern:-**/*.log}
     
     # Validate inputs
-    if [ -z "$job_name" ] || [ -z "$bucket" ] || [ -z "$prefix" ]; then
-        echo -e "${RED}Error: Job name, bucket, and prefix are required.${NC}"
+    if [ -z "$mount_name" ] || [ -z "$bucket" ]; then
+        echo -e "${RED}Error: Mount name and bucket are required.${NC}"
         return 1
     fi
     
-    # Check if job name already exists
-    if grep -q "job_name: $job_name" "$CONFIG_FILE"; then
-        echo -e "${RED}Error: Job name '$job_name' already exists.${NC}"
+    # Create mount point
+    local mount_path="/mnt/s3-logs/$mount_name"
+    sudo mkdir -p "$mount_path"
+    
+    # Get AWS credentials if not in environment or credentials file
+    local creds_file="$HOME/.passwd-s3fs"
+    if [ ! -f "$creds_file" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
+        echo -e "${YELLOW}AWS credentials needed for s3fs mounting.${NC}"
+        read -p "Enter AWS Access Key ID: " aws_access_key
+        read -p "Enter AWS Secret Access Key: " aws_secret_key
+        
+        if [ -n "$aws_access_key" ] && [ -n "$aws_secret_key" ]; then
+            create_s3fs_credentials "$aws_access_key" "$aws_secret_key"
+        else
+            echo -e "${RED}Error: AWS credentials are required.${NC}"
+            return 1
+        fi
+    fi
+    
+    # Construct s3fs bucket path
+    local bucket_path="$bucket"
+    if [ -n "$prefix" ]; then
+        # Remove leading/trailing slashes from prefix
+        prefix=$(echo "$prefix" | sed 's|^/||' | sed 's|/$||')
+        bucket_path="$bucket:$prefix"
+    fi
+    
+    # Mount the S3 bucket
+    echo -e "${BLUE}Mounting S3 bucket: $bucket_path -> $mount_path${NC}"
+    
+    local mount_opts="allow_other,use_cache=/tmp/s3fs-cache,uid=$(id -u),gid=$(id -g)"
+    if sudo s3fs "$bucket_path" "$mount_path" -o "$mount_opts"; then
+        echo -e "${GREEN}✓ S3 bucket mounted successfully!${NC}"
+        
+        # Add to Promtail configuration
+        local promtail_config=$(get_promtail_s3_template "$mount_name" "$mount_path" "$log_pattern")
+        echo "$promtail_config" >> "$CONFIG_FILE"
+        
+        # Add to fstab for persistence
+        local fstab_entry="$bucket_path $mount_path fuse.s3fs _netdev,$mount_opts 0 0"
+        if ! grep -q "$mount_path" /etc/fstab; then
+            echo "$fstab_entry" | sudo tee -a /etc/fstab
+            echo -e "${GREEN}✓ Added to /etc/fstab for automatic mounting.${NC}"
+        fi
+        
+        echo -e "${GREEN}✓ Promtail configuration updated.${NC}"
+        echo -e "${BLUE}Mount path: $mount_path${NC}"
+        echo -e "${BLUE}Log pattern: $log_pattern${NC}"
+    else
+        echo -e "${RED}✗ Failed to mount S3 bucket.${NC}"
         return 1
     fi
     
-    # Create the new config
-    local new_config=$(get_s3_template "$job_name" "$bucket" "$prefix" "$poll_interval")
-    
-    # Add to config file (append to the end)
-    echo "$new_config" >> "$CONFIG_FILE"
-    
-    echo -e "${GREEN}✓ S3 log configuration '$job_name' added successfully!${NC}"
     echo
 }
 
-# Function to remove S3 config
-remove_s3_config() {
-    if ! show_s3_configs; then
+# Function to unmount S3 bucket
+unmount_s3_bucket() {
+    if ! show_s3_mounts; then
         return 1
     fi
     
-    echo -e "${YELLOW}Remove S3 Log Configuration${NC}"
-    echo -e "${YELLOW}=============================${NC}"
+    echo -e "${YELLOW}Unmount S3 Bucket${NC}"
+    echo -e "${YELLOW}=================${NC}"
     
-    read -p "Enter the job name to remove: " job_name
+    read -p "Enter the mount name to remove: " mount_name
     
-    if [ -z "$job_name" ]; then
-        echo -e "${RED}Error: Job name is required.${NC}"
+    if [ -z "$mount_name" ]; then
+        echo -e "${RED}Error: Mount name is required.${NC}"
         return 1
     fi
     
-    # Check if job exists
-    if ! grep -q "job_name: $job_name" "$CONFIG_FILE"; then
-        echo -e "${RED}Error: Job '$job_name' not found.${NC}"
+    local mount_path="/mnt/s3-logs/$mount_name"
+    
+    # Check if mount exists
+    if ! mount | grep -q "$mount_path"; then
+        echo -e "${RED}Error: Mount '$mount_name' not found at $mount_path.${NC}"
         return 1
     fi
     
     # Confirm deletion
-    echo -e "${YELLOW}Are you sure you want to remove '$job_name'? (y/N)${NC}"
+    echo -e "${YELLOW}Are you sure you want to unmount '$mount_name' from $mount_path? (y/N)${NC}"
     read -r confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo -e "${BLUE}Operation cancelled.${NC}"
         return 0
     fi
     
-    # Remove the job configuration (from job_name line to the next job_name or end)
-    python3 -c "
+    # Unmount the S3 bucket
+    echo -e "${BLUE}Unmounting S3 bucket from $mount_path...${NC}"
+    if sudo umount "$mount_path"; then
+        echo -e "${GREEN}✓ S3 bucket unmounted successfully!${NC}"
+        
+        # Remove from fstab
+        if grep -q "$mount_path" /etc/fstab; then
+            sudo sed -i "\|$mount_path|d" /etc/fstab
+            echo -e "${GREEN}✓ Removed from /etc/fstab.${NC}"
+        fi
+        
+        # Remove mount directory
+        sudo rmdir "$mount_path" 2>/dev/null
+        echo -e "${GREEN}✓ Mount directory removed.${NC}"
+        
+        # Remove from Promtail configuration
+        python3 -c "
 import re
 import sys
 
@@ -241,61 +349,73 @@ with open('$CONFIG_FILE', 'r') as f:
     content = f.read()
 
 # Pattern to match the specific job and its configuration
-pattern = r'  - job_name: $job_name\n(.*?)(?=  - job_name:|$)'
+pattern = r'  - job_name: $mount_name\n(.*?)(?=  - job_name:|$)'
 result = re.sub(pattern, '', content, flags=re.DOTALL)
 
 with open('$CONFIG_FILE', 'w') as f:
     f.write(result)
 "
+        echo -e "${GREEN}✓ Promtail configuration updated.${NC}"
+    else
+        echo -e "${RED}✗ Failed to unmount S3 bucket.${NC}"
+        return 1
+    fi
     
-    echo -e "${GREEN}✓ S3 log configuration '$job_name' removed successfully!${NC}"
     echo
 }
 
-# Function to edit existing S3 config
-edit_s3_config() {
-    if ! show_s3_configs; then
+# Function to remount S3 bucket (edit)
+remount_s3_bucket() {
+    if ! show_s3_mounts; then
         return 1
     fi
     
-    echo -e "${PURPLE}Edit S3 Log Configuration${NC}"
-    echo -e "${PURPLE}==========================${NC}"
+    echo -e "${PURPLE}Remount S3 Bucket${NC}"
+    echo -e "${PURPLE}=================${NC}"
     
-    read -p "Enter the job name to edit: " job_name
+    read -p "Enter the mount name to edit: " mount_name
     
-    if [ -z "$job_name" ]; then
-        echo -e "${RED}Error: Job name is required.${NC}"
+    if [ -z "$mount_name" ]; then
+        echo -e "${RED}Error: Mount name is required.${NC}"
         return 1
     fi
     
-    # Check if job exists
-    if ! grep -q "job_name: $job_name" "$CONFIG_FILE"; then
-        echo -e "${RED}Error: Job '$job_name' not found.${NC}"
+    local mount_path="/mnt/s3-logs/$mount_name"
+    
+    # Check if mount exists
+    if ! mount | grep -q "$mount_path"; then
+        echo -e "${RED}Error: Mount '$mount_name' not found at $mount_path.${NC}"
         return 1
     fi
     
-    # Get current values
-    local current_bucket=$(grep -A 10 "job_name: $job_name" "$CONFIG_FILE" | grep "bucket:" | head -1 | sed 's/.*bucket: *//')
-    local current_prefix=$(grep -A 10 "job_name: $job_name" "$CONFIG_FILE" | grep "prefix:" | head -1 | sed 's/.*prefix: *//')
-    local current_poll=$(grep -A 10 "job_name: $job_name" "$CONFIG_FILE" | grep "poll_interval:" | head -1 | sed 's/.*poll_interval: *//')
-    
-    echo -e "${BLUE}Current configuration for '$job_name':${NC}"
-    echo -e "  Bucket: ${YELLOW}$current_bucket${NC}"
-    echo -e "  Prefix: ${YELLOW}$current_prefix${NC}"
-    echo -e "  Poll Interval: ${YELLOW}$current_poll${NC}"
+    echo -e "${BLUE}Current mount: $mount_path${NC}"
+    echo -e "${YELLOW}To edit a mount, we'll unmount and remount with new settings.${NC}"
     echo
     
-    # Get new values
-    read -p "Enter new S3 bucket name (current: $current_bucket): " new_bucket
-    read -p "Enter new S3 prefix (current: $current_prefix): " new_prefix
-    read -p "Enter new poll interval (current: $current_poll): " new_poll
+    # Confirm remount
+    echo -e "${YELLOW}Do you want to proceed with remounting '$mount_name'? (y/N)${NC}"
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Operation cancelled.${NC}"
+        return 0
+    fi
     
-    # Use current values if new ones are empty
-    new_bucket=${new_bucket:-$current_bucket}
-    new_prefix=${new_prefix:-$current_prefix}
-    new_poll=${new_poll:-$current_poll}
+    # Get new mount details
+    read -p "Enter S3 bucket name: " bucket
+    read -p "Enter S3 bucket prefix/path (optional): " prefix
+    read -p "Enter log file pattern (default: **/*.log): " log_pattern
+    log_pattern=${log_pattern:-**/*.log}
     
-    # Remove old config and add new one
+    if [ -z "$bucket" ]; then
+        echo -e "${RED}Error: Bucket name is required.${NC}"
+        return 1
+    fi
+    
+    # Unmount existing
+    echo -e "${BLUE}Unmounting existing mount...${NC}"
+    sudo umount "$mount_path"
+    
+    # Remove old Promtail config
     python3 -c "
 import re
 import sys
@@ -303,33 +423,56 @@ import sys
 with open('$CONFIG_FILE', 'r') as f:
     content = f.read()
 
-# Remove the old configuration
-pattern = r'  - job_name: $job_name\n(.*?)(?=  - job_name:|$)'
+pattern = r'  - job_name: $mount_name\n(.*?)(?=  - job_name:|$)'
 content = re.sub(pattern, '', content, flags=re.DOTALL)
 
 with open('$CONFIG_FILE', 'w') as f:
     f.write(content)
 "
     
-    # Add the updated config
-    local updated_config=$(get_s3_template "$job_name" "$new_bucket" "$new_prefix" "$new_poll")
+    # Construct new bucket path
+    local bucket_path="$bucket"
+    if [ -n "$prefix" ]; then
+        prefix=$(echo "$prefix" | sed 's|^/||' | sed 's|/$||')
+        bucket_path="$bucket:$prefix"
+    fi
     
-    # Append the updated config to the file
-    echo "$updated_config" >> "$CONFIG_FILE"
+    # Remount with new settings
+    echo -e "${BLUE}Remounting with new settings: $bucket_path -> $mount_path${NC}"
+    local mount_opts="allow_other,use_cache=/tmp/s3fs-cache,uid=$(id -u),gid=$(id -g)"
     
-    echo -e "${GREEN}✓ S3 log configuration '$job_name' updated successfully!${NC}"
+    if sudo s3fs "$bucket_path" "$mount_path" -o "$mount_opts"; then
+        echo -e "${GREEN}✓ S3 bucket remounted successfully!${NC}"
+        
+        # Update Promtail configuration
+        local promtail_config=$(get_promtail_s3_template "$mount_name" "$mount_path" "$log_pattern")
+        echo "$promtail_config" >> "$CONFIG_FILE"
+        
+        # Update fstab
+        sudo sed -i "\|$mount_path|d" /etc/fstab
+        local fstab_entry="$bucket_path $mount_path fuse.s3fs _netdev,$mount_opts 0 0"
+        echo "$fstab_entry" | sudo tee -a /etc/fstab
+        
+        echo -e "${GREEN}✓ Configuration updated successfully!${NC}"
+        echo -e "${BLUE}Mount path: $mount_path${NC}"
+        echo -e "${BLUE}Log pattern: $log_pattern${NC}"
+    else
+        echo -e "${RED}✗ Failed to remount S3 bucket.${NC}"
+        return 1
+    fi
+    
     echo
 }
 
-# S3 logs management menu
-s3_logs_menu() {
+# S3 bucket management menu
+s3_bucket_menu() {
     while true; do
-        echo -e "${CYAN}S3 Logs Management${NC}"
-        echo -e "${CYAN}==================${NC}"
-        echo -e "${GREEN}1.${NC} View current S3 log configurations"
-        echo -e "${GREEN}2.${NC} Add new S3 log configuration"
-        echo -e "${GREEN}3.${NC} Edit existing S3 log configuration"
-        echo -e "${GREEN}4.${NC} Remove S3 log configuration"
+        echo -e "${CYAN}S3 Bucket Management${NC}"
+        echo -e "${CYAN}====================${NC}"
+        echo -e "${GREEN}1.${NC} View current S3 bucket mounts"
+        echo -e "${GREEN}2.${NC} Mount new S3 bucket"
+        echo -e "${GREEN}3.${NC} Remount existing S3 bucket"
+        echo -e "${GREEN}4.${NC} Unmount S3 bucket"
         echo -e "${GREEN}5.${NC} Back to main menu"
         echo
         
@@ -338,16 +481,16 @@ s3_logs_menu() {
         
         case $s3_choice in
             1)
-                show_s3_configs
+                show_s3_mounts
                 ;;
             2)
-                add_s3_config
+                mount_s3_bucket
                 ;;
             3)
-                edit_s3_config
+                remount_s3_bucket
                 ;;
             4)
-                remove_s3_config
+                unmount_s3_bucket
                 ;;
             5)
                 return 0
@@ -369,7 +512,7 @@ loki_config_menu() {
     while true; do
         echo -e "${CYAN}Configure Loki${NC}"
         echo -e "${CYAN}==============${NC}"
-        echo -e "${GREEN}1.${NC} Manage S3 Log Scrapers"
+        echo -e "${GREEN}1.${NC} Manage S3 Bucket Mounts"
         echo -e "${GREEN}2.${NC} Back to main menu"
         echo
         
@@ -378,7 +521,7 @@ loki_config_menu() {
         
         case $loki_choice in
             1)
-                s3_logs_menu
+                s3_bucket_menu
                 ;;
             2)
                 return 0
