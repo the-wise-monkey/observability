@@ -1,10 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const zlib = require('zlib');
-const { promisify } = require('util');
-
-const gunzip = promisify(zlib.gunzip);
+const pako = require('pako');
 
 const LOKI_URL = process.env.LOKI_URL || 'http://loki:3100/loki/api/v1/push';
 
@@ -31,11 +28,11 @@ app.post('/logpush', async (req, res) => {
     // Handle gzip-compressed logs
     if (contentEncoding === 'gzip') {
       console.log('Processing gzip-compressed logs');
-      const decompressed = await gunzip(logs);
-      const logData = decompressed.toString('utf8');
-      
-      // Split by newlines and filter empty lines
-      const logLines = logData.split('\n').filter(line => line.trim() !== '');
+      const data = pako.inflate(logs);
+      const logdata = new Uint16Array(data).reduce(function(data, byte) {
+        return data + String.fromCharCode(byte);
+      }, '');
+      const logLines = logdata.split('\n').filter(line => line.trim() !== '');
       
       logs = logLines.map(line => {
         try {
