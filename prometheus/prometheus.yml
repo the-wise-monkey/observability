@@ -1,6 +1,24 @@
+# =========================================
+# Prometheus Configuration
+# =========================================
+#
+# This file configures Prometheus for the observability stack with:
+# - Service discovery via Consul
+# - Blackbox monitoring for HTTP/TCP endpoints  
+# - Self-monitoring of stack components
+# - Automatic target discovery with proper labeling
+#
+# Service Discovery Strategy:
+# - Consul SD for dynamic service discovery
+# - Static configs for core infrastructure
+# - Blackbox exporter for endpoint health checks
+# - Tag-based filtering for monitoring scope
+#
+# =========================================
+
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 15s       # How frequently to scrape targets
+  evaluation_interval: 15s   # How frequently to evaluate rules
 
 rule_files:
   # - "first_rules.yml"

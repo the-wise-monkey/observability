@@ -1,0 +1,187 @@
+# Observability Stack - Coding Standards & Rules
+
+## 📋 Project Organization Rules
+
+### Directory Structure Standards
+- **Configuration files**: Each service has its own directory (`prometheus/`, `grafana/`, etc.)
+- **Service-specific configs**: Keep all service configurations in their respective directories
+- **Shared configs**: Root level for shared files (`docker-compose.yml`, `nginx.conf`, `manage`)
+- **Data persistence**: Use named volumes, avoid bind mounts for data directories
+- **Documentation**: Maintain comprehensive README.md and inline documentation
+
+### File Naming Conventions
+- **Configuration files**: Use descriptive names with proper extensions
+  - `prometheus.yml` (not `config.yml`)
+  - `loki-config.yaml` (include service name)
+  - `consul.hcl` (use appropriate config format)
+- **Scripts**: Use lowercase, descriptive names without extensions for executables
+  - `manage` (not `manage.sh`)
+- **Documentation**: Use uppercase for important files (`README.md`, `LICENSE`)
+
+## 🐳 Docker & Container Standards
+
+### Docker Compose Best Practices
+- **Use specific image tags**: Avoid `latest` in production, prefer versioned tags
+- **Resource limits**: Define appropriate CPU/memory limits for production
+- **Health checks**: Implement proper health checks for all services
+- **Dependency management**: Use `depends_on` correctly with health check conditions
+- **Environment variables**: Use `.env` file for configuration, never hardcode sensitive data
+- **Network isolation**: Use custom networks when needed, avoid default bridge
+- **Volume management**: Use named volumes for persistence, bind mounts for config
+
+### Service Configuration
+- **Consistent naming**: Use kebab-case for container names
+- **Port mapping**: Document all exposed ports in comments
+- **Restart policies**: Use `unless-stopped` for production services
+- **Security**: Run containers as non-root when possible
+- **Logging**: Configure proper log drivers and retention
+
+## ⚙️ Configuration Management Standards
+
+### YAML/HCL Configuration
+- **Indentation**: Use 2 spaces for YAML, consistent indentation for HCL
+- **Comments**: Add descriptive comments for complex configurations
+- **Structure**: Group related configurations logically
+- **Validation**: Always validate configs before deployment
+- **Secrets**: Never commit secrets, use environment variables or secret management
+
+### Service-Specific Rules
+
+#### Prometheus (`prometheus/`)
+- **Scrape configs**: Group by service type (static, consul, blackbox)
+- **Retention**: Set appropriate retention periods based on storage
+- **Service discovery**: Use Consul SD where possible, avoid static configs
+- **Labels**: Use consistent labeling strategy across all jobs
+- **Rule files**: Separate alerting rules into dedicated files
+
+#### Consul (`consul/`)
+- **Service definitions**: Include all required health checks
+- **Tags**: Use consistent tagging strategy for service categorization
+- **Security**: Enable ACLs in production environments
+- **Networking**: Configure proper bind and client addresses
+- **Data persistence**: Always use persistent storage for Consul data
+
+#### Grafana
+- **Dashboard provisioning**: Use code-based dashboard provisioning
+- **Data sources**: Configure via environment or provisioning files
+- **Plugins**: Document required plugins in configuration
+- **Authentication**: Configure appropriate auth providers
+- **Alerting**: Set up notification channels properly
+
+#### Loki/Promtail (`loki/`, `promtail/`)
+- **Storage**: Configure appropriate storage backend
+- **Retention**: Set log retention policies
+- **Labels**: Use consistent log labeling strategy
+- **Parsing**: Implement proper log parsing pipelines
+- **Performance**: Configure appropriate limits and timeouts
+
+## 🔧 Script & Automation Standards
+
+### Bash Script Guidelines (`manage` script)
+- **Shebang**: Always use `#!/usr/bin/env bash`
+- **Error handling**: Use `set -e` for error propagation
+- **Functions**: Create reusable functions for common operations
+- **User interaction**: Provide clear prompts and colored output
+- **Logging**: Add appropriate logging for debugging
+- **Documentation**: Comment complex logic and provide usage examples
+
+### Environment Management
+- **Environment files**: Use `.env` for environment-specific configuration
+- **Variable naming**: Use UPPER_CASE for environment variables
+- **Default values**: Provide sensible defaults using `${VAR:-default}` syntax
+- **Validation**: Validate required environment variables before use
+- **Security**: Never commit `.env` files, provide `.env.example`
+
+## 🌐 Network & Security Standards
+
+### Nginx Configuration (`nginx.conf`)
+- **Virtual hosts**: Use clear server block organization
+- **Proxy headers**: Always set proper proxy headers
+- **Security headers**: Implement security headers where appropriate
+- **URL rewriting**: Use clean, consistent URL patterns
+- **Error handling**: Configure appropriate error pages
+- **Logging**: Enable access and error logging
+
+### Security Best Practices
+- **Secrets management**: Use environment variables or external secret stores
+- **Network segmentation**: Isolate services appropriately
+- **Authentication**: Enable authentication in production
+- **TLS/SSL**: Use HTTPS for all external communications
+- **Firewall**: Configure appropriate port restrictions
+- **Updates**: Regular security updates for all components
+
+## 📊 Monitoring & Observability Standards
+
+### Metrics & Alerting
+- **Naming conventions**: Use consistent metric naming (snake_case)
+- **Labels**: Implement consistent labeling strategy
+- **Service discovery**: Prefer dynamic discovery over static configuration
+- **Health checks**: Implement meaningful health checks for all services
+- **SLIs/SLOs**: Define clear service level indicators and objectives
+- **Alert fatigue**: Avoid noisy alerts, focus on actionable alerts
+
+### Logging Standards
+- **Structured logging**: Use JSON or key-value pair logging where possible
+- **Log levels**: Use appropriate log levels (DEBUG, INFO, WARN, ERROR)
+- **Correlation**: Include correlation IDs for request tracing
+- **Retention**: Set appropriate log retention policies
+- **Privacy**: Avoid logging sensitive information
+
+## 🔄 Development & Maintenance
+
+### Version Control
+- **Commit messages**: Use conventional commit format
+- **Branching**: Use feature branches for development
+- **Documentation**: Update documentation with code changes
+- **Testing**: Test configuration changes in isolated environments
+- **Rollback**: Maintain ability to rollback configurations
+
+### Code Review Guidelines
+- **Configuration validation**: Validate all config files
+- **Security review**: Review security implications of changes
+- **Documentation**: Ensure documentation is updated
+- **Testing**: Verify changes work in development environment
+- **Backward compatibility**: Maintain compatibility when possible
+
+### Deployment Standards
+- **Staging**: Test in staging environment before production
+- **Rollback plan**: Always have a rollback strategy
+- **Monitoring**: Monitor deployment health
+- **Documentation**: Document deployment procedures
+- **Communication**: Communicate changes to stakeholders
+
+## 🚨 Emergency Procedures
+
+### Incident Response
+- **Runbooks**: Maintain operational runbooks for common issues
+- **Contact information**: Keep contact information current
+- **Escalation**: Define clear escalation procedures
+- **Communication**: Use appropriate communication channels
+- **Post-mortems**: Conduct blameless post-mortems
+
+### Backup & Recovery
+- **Data backup**: Regular backups of persistent data
+- **Configuration backup**: Version control all configurations
+- **Recovery testing**: Regular recovery procedure testing
+- **Documentation**: Maintain recovery documentation
+- **RTO/RPO**: Define recovery time and point objectives
+
+## 📝 Documentation Requirements
+
+### Code Documentation
+- **Inline comments**: Comment complex configurations
+- **README files**: Maintain comprehensive documentation
+- **Architecture diagrams**: Keep architecture documentation current
+- **Runbooks**: Document operational procedures
+- **Troubleshooting**: Maintain troubleshooting guides
+
+### Change Documentation
+- **Changelog**: Maintain a changelog for significant changes
+- **Migration guides**: Document migration procedures for breaking changes
+- **API documentation**: Document any APIs or interfaces
+- **Configuration examples**: Provide configuration examples
+- **Best practices**: Document implementation best practices
+
+---
+
+**Remember**: These rules ensure maintainability, security, and reliability of the observability stack. Always prioritize clarity, consistency, and documentation in your implementations. 

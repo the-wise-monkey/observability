@@ -1,5 +1,36 @@
 version: '3.8'
 
+# =========================================
+# Observability Stack - Docker Compose
+# =========================================
+# 
+# This docker-compose file defines a complete observability stack including:
+# - Prometheus (metrics collection)
+# - Grafana (visualization & dashboards) 
+# - Loki + Promtail (log aggregation)
+# - Consul (service discovery)
+# - Blackbox Exporter (endpoint monitoring)
+# - Nginx (reverse proxy)
+# - Metabase (business intelligence)
+#
+# Usage:
+#   docker compose up -d           # Start all services
+#   docker compose down            # Stop all services  
+#   docker compose logs -f <svc>   # View service logs
+#   ./manage                       # Interactive setup
+#
+# Port mappings:
+#   80    - Nginx (reverse proxy to all services)
+#   3000  - Grafana (http://localhost/grafana)
+#   3030  - Metabase (http://localhost/metabase) 
+#   3100  - Loki (log ingestion)
+#   8500  - Consul (http://localhost/consul)
+#   9080  - Promtail (log collection)
+#   9090  - Prometheus (http://localhost/prometheus)
+#   9115  - Blackbox Exporter (http://localhost/blackbox)
+#
+# =========================================
+
 services:
   blackbox-exporter:
     image: prom/blackbox-exporter:latest
