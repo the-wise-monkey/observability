@@ -15,7 +15,7 @@ scrape_configs:
         http_listen_port: 1515
         log_level: "debug"
       labels:
-        job: "dockerjson"
+        job: "push_api"
     pipeline_stages:
       - timestamp:
           source: timestamp
