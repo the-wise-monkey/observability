@@ -1,6 +1,35 @@
 version: '3.8'
 
 services:
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+
+  consul:
+    image: consul:latest
+    container_name: consul
+    restart: unless-stopped
+    ports:
+      - "8500:8500"    # HTTP API and Web UI
+      - "8600:8600/udp" # DNS
+      - "8300:8300"    # Server RPC
+      - "8301:8301"    # Serf LAN
+      - "8302:8302"    # Serf WAN
+    volumes:
+      - ./consul/consul.hcl:/consul/config/consul.hcl:ro
+      - consul-data:/consul/data
+    command:
+      - 'consul'
+      - 'agent'
+      - '-config-file=/consul/config/consul.hcl'
+
   grafana:
     image: grafana/grafana-oss:latest
     ports:
@@ -46,6 +75,8 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - grafana
+      - consul
+      - blackbox-exporter
 
   promtail:
     image: grafana/promtail:latest
@@ -83,3 +114,4 @@ volumes:
   loki-data:
   metabase-data:
   prometheus-data:
+  consul-data:

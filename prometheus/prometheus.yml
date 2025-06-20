@@ -37,4 +37,97 @@ scrape_configs:
   # - job_name: 'nginx'
   #   static_configs:
   #     - targets: ['nginx:9113']
-  #   scrape_interval: 30s 
+  #   scrape_interval: 30s
+
+  # Blackbox exporter for HTTP endpoint monitoring
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Look for a HTTP 200 response
+    consul_sd_configs:
+      - server: 'consul:8500'
+        datacenter: 'dc1'
+        tags: ['http-monitor']  # Only monitor services with this tag
+    relabel_configs:
+      # Construct the target URL from Consul metadata
+      - source_labels: [__meta_consul_service_address, __meta_consul_service_port, __meta_consul_service_metadata_health_path]
+        target_label: __param_target
+        replacement: 'http://${1}:${2}${3}'
+        regex: '([^:]+);(\d+);(.+)'
+      # Fallback for services without custom health path - use default /health
+      - source_labels: [__meta_consul_service_address, __meta_consul_service_port]
+        target_label: __param_target
+        replacement: 'http://${1}:${2}/health'
+        regex: '([^:]+);(\d+)'
+      # Use the constructed target as instance label
+      - source_labels: [__param_target]
+        target_label: instance
+      # Point to blackbox exporter
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      # Add service name as a label
+      - source_labels: [__meta_consul_service]
+        target_label: service
+      # Add service tags as labels
+      - source_labels: [__meta_consul_tags]
+        target_label: tags
+
+  # Blackbox exporter for TCP port monitoring  
+  - job_name: 'blackbox-tcp'
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    consul_sd_configs:
+      - server: 'consul:8500'
+        datacenter: 'dc1'
+        tags: ['tcp-monitor']  # Only monitor services with this tag
+    relabel_configs:
+      # Construct target from service address and port
+      - source_labels: [__meta_consul_service_address, __meta_consul_service_port]
+        target_label: __param_target
+        replacement: '${1}:${2}'
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      # Add service name as a label
+      - source_labels: [__meta_consul_service]
+        target_label: service
+      # Add service tags as labels
+      - source_labels: [__meta_consul_tags]
+        target_label: tags
+
+  # Blackbox exporter self-monitoring
+  - job_name: 'blackbox-exporter'
+    static_configs:
+      - targets: ['blackbox-exporter:9115']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # Consul metrics
+  - job_name: 'consul'
+    static_configs:
+      - targets: ['consul:8500']
+    scrape_interval: 30s
+    metrics_path: '/v1/agent/metrics'
+    params:
+      format: ['prometheus']
+
+  # Service discovery via Consul
+  - job_name: 'consul-services'
+    consul_sd_configs:
+      - server: 'consul:8500'
+        datacenter: 'dc1'
+    relabel_configs:
+      # Only scrape services that have a 'prometheus' tag
+      - source_labels: [__meta_consul_tags]
+        regex: '.*,prometheus,.*'
+        action: keep
+      # Use the service name as the job label
+      - source_labels: [__meta_consul_service]
+        target_label: job
+      # Use the service address and port
+      - source_labels: [__meta_consul_service_address, __meta_consul_service_port]
+        regex: '([^:]+):?(\d+)?'
+        target_label: __address__
+        replacement: '${1}:${2}' 
