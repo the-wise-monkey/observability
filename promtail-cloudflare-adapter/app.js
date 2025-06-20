@@ -39,7 +39,24 @@ app.post('/logpush', async (req, res) => {
       return res.status(200).json({ message: 'No logs to process' });
     }
 
-    const entries = logs.map(log => ({
+    // Filter out empty or invalid log objects
+    const validLogs = logs.filter(log => {
+      if (!log || typeof log !== 'object') return false;
+      // Check if object has at least some meaningful properties
+      const keys = Object.keys(log);
+      return keys.length > 0 && keys.some(key => log[key] !== null && log[key] !== undefined && log[key] !== '');
+    });
+    
+    if (validLogs.length === 0) {
+      console.warn('No valid log entries found in request');
+      return res.status(200).json({ message: 'No valid logs to process' });
+    }
+    
+    if (validLogs.length !== logs.length) {
+      console.warn(`Filtered out ${logs.length - validLogs.length} invalid log entries`);
+    }
+
+    const entries = validLogs.map(log => ({
       ts: now,
       line: JSON.stringify(log)
     }));
@@ -58,7 +75,7 @@ app.post('/logpush', async (req, res) => {
     });
     
     console.log(`Successfully pushed ${entries.length} log entries to Loki`);
-    res.status(200).json({ message: `Processed ${entries.length} log entries` });
+    res.status(200).json({ message: `Processed ${entries.length} valid log entries` });
     
   } catch (err) {
     console.error('Error processing logs:', err.message);
