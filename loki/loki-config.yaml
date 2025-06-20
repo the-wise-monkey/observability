@@ -19,6 +19,9 @@ common:
 limits_config:
   volume_enabled: true
 
+pattern_ingester:
+  enabled: true
+
 query_range:
   results_cache:
     cache:
