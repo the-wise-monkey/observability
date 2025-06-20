@@ -10,6 +10,8 @@ app.use(bodyParser.json({ limit: '10mb' }));
 app.post('/logpush', async (req, res) => {
   const now = new Date().toISOString();
 
+  console.log(req.body);
+
   const entries = req.body.map(log => ({
     ts: now,
     line: JSON.stringify(log)
