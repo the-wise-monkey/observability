@@ -12,6 +12,7 @@ client_addr = "0.0.0.0"
 # Enable UI
 ui_config {
   enabled = true
+  content_path = "/consul/"
 }
 
 # Enable metrics collection
