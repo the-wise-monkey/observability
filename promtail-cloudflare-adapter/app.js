@@ -1,22 +1,57 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
+const zlib = require('zlib');
+const { promisify } = require('util');
+
+const gunzip = promisify(zlib.gunzip);
 
 const LOKI_URL = process.env.LOKI_URL || 'http://loki:3100/loki/api/v1/push';
 
 const app = express();
-app.use(bodyParser.json({ limit: '10mb' }));
+
+// Handle both regular JSON and gzip-compressed content
+app.use('/logpush', (req, res, next) => {
+  const contentEncoding = req.headers['content-encoding'];
+  if (contentEncoding === 'gzip') {
+    // For gzip content, we need raw buffer
+    bodyParser.raw({ type: '*/*', limit: '50mb' })(req, res, next);
+  } else {
+    // For regular content, use JSON parser
+    bodyParser.json({ limit: '10mb' })(req, res, next);
+  }
+});
 
 app.post('/logpush', async (req, res) => {
   try {
-    const now = new Date().toISOString();
-    
-    // Handle different input formats
+    const contentEncoding = req.headers['content-encoding'];
+    const contentType = req.headers['content-type'] || '';
     let logs = req.body;
     
+    // Handle gzip-compressed logs
+    if (contentEncoding === 'gzip') {
+      console.log('Processing gzip-compressed logs');
+      const decompressed = await gunzip(logs);
+      const logData = decompressed.toString('utf8');
+      
+      // Split by newlines and filter empty lines
+      const logLines = logData.split('\n').filter(line => line.trim() !== '');
+      
+      logs = logLines.map(line => {
+        try {
+          return JSON.parse(line);
+        } catch (e) {
+          // If line is not JSON, return as string
+          return { message: line };
+        }
+      });
+    }
+    
     // Log the received data for debugging
+    console.log('Content-Encoding:', contentEncoding);
+    console.log('Content-Type:', contentType);
     console.log('Received data type:', typeof logs);
-    console.log('Received data:', JSON.stringify(logs).substring(0, 200) + '...');
+    console.log('Number of log entries:', Array.isArray(logs) ? logs.length : 1);
     
     // Ensure we have an array of logs
     if (!logs) {
@@ -56,10 +91,23 @@ app.post('/logpush', async (req, res) => {
       console.warn(`Filtered out ${logs.length - validLogs.length} invalid log entries`);
     }
 
-    const entries = validLogs.map(log => ({
-      ts: now,
-      line: JSON.stringify(log)
-    }));
+    // Create entries with proper timestamps
+    const entries = validLogs.map(log => {
+      // Use EdgeStartTimestamp if available, otherwise use current time
+      let timestamp;
+      if (log.EdgeStartTimestamp) {
+        // EdgeStartTimestamp is usually in nanoseconds, convert to nanoseconds string
+        timestamp = (log.EdgeStartTimestamp * 1000000).toString();
+      } else {
+        // Current time in nanoseconds
+        timestamp = (Date.now() * 1000000).toString();
+      }
+      
+      return {
+        ts: timestamp,
+        line: JSON.stringify(log)
+      };
+    });
 
     const payload = {
       streams: [
