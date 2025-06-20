@@ -32,16 +32,7 @@ app.post('/logpush', async (req, res) => {
       const logdata = new Uint16Array(data).reduce(function(data, byte) {
         return data + String.fromCharCode(byte);
       }, '');
-      const logLines = logdata.split('\n').filter(line => line.trim() !== '');
-      
-      logs = logLines.map(line => {
-        try {
-          return JSON.parse(line);
-        } catch (e) {
-          // If line is not JSON, return as string
-          return { message: line };
-        }
-      });
+      logs = logdata.split('\n').filter(line => line.trim() !== '');
     }
     
     // Log the received data for debugging
@@ -90,20 +81,34 @@ app.post('/logpush', async (req, res) => {
 
     // Create entries with proper timestamps
     const entries = validLogs.map(log => {
-      // Use EdgeStartTimestamp if available, otherwise use current time
       let timestamp;
-      if (log.EdgeStartTimestamp) {
-        // EdgeStartTimestamp is usually in nanoseconds, convert to nanoseconds string
-        timestamp = (log.EdgeStartTimestamp * 1000000).toString();
-      } else {
-        // Current time in nanoseconds
-        timestamp = (Date.now() * 1000000).toString();
-      }
       
-      return {
-        ts: timestamp,
-        line: JSON.stringify(log)
-      };
+      if (contentEncoding === 'gzip') {
+        // For gzip logs, try to parse as JSON to get EdgeStartTimestamp
+        try {
+          const parsedLog = JSON.parse(log);
+          timestamp = parsedLog.EdgeStartTimestamp || Date.now() * 1000000;
+        } catch (e) {
+          timestamp = Date.now() * 1000000;
+        }
+        
+        return {
+          ts: timestamp.toString(),
+          line: log // Keep raw log line for gzip
+        };
+      } else {
+        // For non-gzip logs, handle as objects
+        if (log.EdgeStartTimestamp) {
+          timestamp = log.EdgeStartTimestamp * 1000000;
+        } else {
+          timestamp = Date.now() * 1000000;
+        }
+        
+        return {
+          ts: timestamp.toString(),
+          line: JSON.stringify(log)
+        };
+      }
     });
 
     const payload = {
