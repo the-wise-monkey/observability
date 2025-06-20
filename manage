@@ -39,14 +39,7 @@ create_env() {
     MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
     echo
     
-    # AWS configuration (for S3 bucket mounting)
-    echo -e "${BLUE}=== AWS Configuration ===${NC}"
-    echo -e "${YELLOW}Configure AWS credentials for S3 bucket mounting${NC}"
-    read -p "Enter AWS Access Key ID: " AWS_ACCESS_KEY_ID
-    read -p "Enter AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
-    read -p "Enter AWS Region (default: us-east-1): " AWS_REGION
-    AWS_REGION=${AWS_REGION:-us-east-1}
-    echo
+
     
     # Write to .env file
     {
@@ -54,10 +47,7 @@ create_env() {
         echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
         echo "MB_SITE_URL=\"$MB_SITE_URL\""
         echo
-        echo "# AWS Configuration (for S3 bucket mounting)"
-        echo "AWS_ACCESS_KEY_ID=\"$AWS_ACCESS_KEY_ID\""
-        echo "AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET_ACCESS_KEY\""
-        echo "AWS_REGION=\"$AWS_REGION\""
+
     } > "$ENV_FILE"
     echo -e "${GREEN}.env file created.${NC}"
 }
