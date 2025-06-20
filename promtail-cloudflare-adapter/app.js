@@ -8,33 +8,64 @@ const app = express();
 app.use(bodyParser.json({ limit: '10mb' }));
 
 app.post('/logpush', async (req, res) => {
-  const now = new Date().toISOString();
-
-  console.log(req.body);
-
-  const entries = req.body.map(log => ({
-    ts: now,
-    line: JSON.stringify(log)
-  }));
-
-  const payload = {
-    streams: [
-      {
-        labels: '{job="cloudflare-logpush"}',
-        entries
-      }
-    ]
-  };
-
   try {
+    const now = new Date().toISOString();
+    
+    // Handle different input formats
+    let logs = req.body;
+    
+    // Log the received data for debugging
+    console.log('Received data type:', typeof logs);
+    console.log('Received data:', JSON.stringify(logs).substring(0, 200) + '...');
+    
+    // Ensure we have an array of logs
+    if (!logs) {
+      console.error('No data received');
+      return res.status(400).json({ error: 'No data received' });
+    }
+    
+    if (!Array.isArray(logs)) {
+      // If it's a single object, wrap it in an array
+      if (typeof logs === 'object') {
+        logs = [logs];
+      } else {
+        console.error('Invalid data format:', typeof logs);
+        return res.status(400).json({ error: 'Data must be an array or object' });
+      }
+    }
+    
+    if (logs.length === 0) {
+      console.warn('Empty array received');
+      return res.status(200).json({ message: 'No logs to process' });
+    }
+
+    const entries = logs.map(log => ({
+      ts: now,
+      line: JSON.stringify(log)
+    }));
+
+    const payload = {
+      streams: [
+        {
+          labels: '{job="cloudflare-logpush"}',
+          entries
+        }
+      ]
+    };
+
     await axios.post(LOKI_URL, payload, {
       headers: { 'Content-Type': 'application/json' }
     });
+    
     console.log(`Successfully pushed ${entries.length} log entries to Loki`);
-    res.sendStatus(200);
+    res.status(200).json({ message: `Processed ${entries.length} log entries` });
+    
   } catch (err) {
-    console.error('Loki push failed:', err.response?.data || err.message);
-    res.sendStatus(500);
+    console.error('Error processing logs:', err.message);
+    if (err.response) {
+      console.error('Loki response:', err.response.data);
+    }
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
