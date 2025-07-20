@@ -74,6 +74,8 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SERVER_ROOT_URL=http://localhost/grafana
+    volumes:
+      - grafana-data:/var/lib/grafana
     depends_on:
       - loki
 
@@ -262,6 +264,7 @@ services:
 
 volumes:
   consul-data:
+  grafana-data:
   loki-data:
   metabase-data:
   prometheus-data:
