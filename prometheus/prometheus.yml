@@ -51,6 +51,27 @@ scrape_configs:
     scrape_interval: 30s
     metrics_path: '/metrics'
 
+  # Add Sentry metrics if available
+  - job_name: 'sentry-web'
+    static_configs:
+      - targets: ['sentry-web:9000']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # Add PostgreSQL metrics if available
+  - job_name: 'sentry-postgres'
+    static_configs:
+      - targets: ['sentry-postgres:5432']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # Add Redis metrics if available
+  - job_name: 'sentry-redis'
+    static_configs:
+      - targets: ['sentry-redis:6379']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
   # Add nginx metrics if nginx-prometheus-exporter is available
   # - job_name: 'nginx'
   #   static_configs:

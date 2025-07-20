@@ -39,6 +39,34 @@ create_env() {
     MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
     echo
     
+    # Sentry configuration
+    echo -e "${BLUE}=== Sentry Configuration ===${NC}"
+    echo -e "${YELLOW}Generating Sentry secret key...${NC}"
+    SENTRY_SECRET_KEY=$(openssl rand -base64 32)
+    echo -e "${GREEN}Sentry secret key generated.${NC}"
+    echo
+    
+    read -p "Enter Sentry database password (default: sentry): " SENTRY_DB_PASSWORD
+    SENTRY_DB_PASSWORD=${SENTRY_DB_PASSWORD:-sentry}
+    
+    read -p "Enter Sentry mail host (default: localhost): " SENTRY_MAIL_HOST
+    SENTRY_MAIL_HOST=${SENTRY_MAIL_HOST:-localhost}
+    
+    read -p "Enter Sentry mail port (default: 25): " SENTRY_MAIL_PORT
+    SENTRY_MAIL_PORT=${SENTRY_MAIL_PORT:-25}
+    
+    read -p "Enter Sentry mail username (optional): " SENTRY_MAIL_USERNAME
+    read -p "Enter Sentry mail password (optional): " SENTRY_MAIL_PASSWORD
+    read -p "Enter Sentry server email (default: sentry@localhost): " SENTRY_SERVER_EMAIL
+    SENTRY_SERVER_EMAIL=${SENTRY_SERVER_EMAIL:-sentry@localhost}
+    
+    read -p "Use TLS for mail? (y/N): " SENTRY_MAIL_USE_TLS
+    SENTRY_MAIL_USE_TLS=${SENTRY_MAIL_USE_TLS:-false}
+    
+    read -p "Enable Sentry debug mode? (y/N): " SENTRY_DEBUG
+    SENTRY_DEBUG=${SENTRY_DEBUG:-false}
+    echo
+    
 
     
     # Write to .env file
@@ -46,6 +74,17 @@ create_env() {
         echo "# Metabase Configuration"
         echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
         echo "MB_SITE_URL=\"$MB_SITE_URL\""
+        echo
+        echo "# Sentry Configuration"
+        echo "SENTRY_SECRET_KEY=\"$SENTRY_SECRET_KEY\""
+        echo "SENTRY_DB_PASSWORD=\"$SENTRY_DB_PASSWORD\""
+        echo "SENTRY_MAIL_HOST=\"$SENTRY_MAIL_HOST\""
+        echo "SENTRY_MAIL_PORT=\"$SENTRY_MAIL_PORT\""
+        echo "SENTRY_MAIL_USERNAME=\"$SENTRY_MAIL_USERNAME\""
+        echo "SENTRY_MAIL_PASSWORD=\"$SENTRY_MAIL_PASSWORD\""
+        echo "SENTRY_MAIL_USE_TLS=\"$SENTRY_MAIL_USE_TLS\""
+        echo "SENTRY_SERVER_EMAIL=\"$SENTRY_SERVER_EMAIL\""
+        echo "SENTRY_DEBUG=\"$SENTRY_DEBUG\""
         echo
 
     } > "$ENV_FILE"

@@ -130,4 +130,43 @@ services {
     interval = "30s"
     timeout = "5s"
   }
+}
+
+services {
+  name = "sentry-web"
+  port = 9000
+  address = "sentry-web"
+  tags = ["observability", "error-tracking", "http-monitor", "tcp-monitor"]
+  meta = {
+    health_path = "/_health/"
+  }
+  check {
+    http = "http://sentry-web:9000/_health/"
+    interval = "30s"
+    timeout = "10s"
+  }
+}
+
+services {
+  name = "sentry-postgres"
+  port = 5432
+  address = "sentry-postgres"
+  tags = ["database", "postgres", "tcp-monitor"]
+  check {
+    tcp = "sentry-postgres:5432"
+    interval = "30s"
+    timeout = "5s"
+  }
+}
+
+services {
+  name = "sentry-redis"
+  port = 6379
+  address = "sentry-redis"
+  tags = ["cache", "redis", "tcp-monitor"]
+  check {
+    tcp = "sentry-redis:6379"
+    interval = "30s"
+    timeout = "5s"
+  }
 } 

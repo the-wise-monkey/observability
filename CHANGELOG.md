@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Sentry** - Error tracking and performance monitoring platform
+  - Sentry Web, Worker, and Cron services
+  - PostgreSQL database for Sentry data storage
+  - Redis for caching and queue management
+  - Comprehensive Sentry configuration with environment variables
+  - Integration with Nginx reverse proxy
+  - Service discovery via Consul
+  - Prometheus monitoring for Sentry services
 - Comprehensive README.md with architecture overview and setup instructions
 - Coding standards and project organization rules in `.cursorrules`
 - Enhanced `.gitignore` with comprehensive exclusion patterns
