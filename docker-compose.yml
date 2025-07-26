@@ -188,8 +188,6 @@ services:
       POSTGRES_PASSWORD: ${SENTRY_DB_PASSWORD:-sentry}
     volumes:
       - sentry-postgres:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
 
   sentry-redis:
     image: redis:7-alpine
@@ -197,8 +195,6 @@ services:
     restart: unless-stopped
     volumes:
       - sentry-redis:/data
-    ports:
-      - "6379:6379"
 
   sentry-web:
     image: getsentry/sentry:latest
