@@ -40,23 +40,23 @@ services:
     image: prom/blackbox-exporter:latest
     container_name: blackbox-exporter
     restart: unless-stopped
+    ports:
+      - "9115:9115"
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     command:
       - '--config.file=/etc/blackbox_exporter/config.yml'
-    networks:
-      - dokploy-network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.blackbox.rule=Host(`blackbox.0xfutbol.com`)"
-      - "traefik.http.routers.blackbox.entrypoints=websecure"
-      - "traefik.http.routers.blackbox.tls.certresolver=letsencrypt"
-      - "traefik.http.services.blackbox.loadbalancer.server.port=9115"
 
   consul:
     image: hashicorp/consul:latest
     container_name: consul
     restart: unless-stopped
+    ports:
+      - "8500:8500"    # HTTP API and Web UI
+      - "8600:8600/udp" # DNS
+      - "8300:8300"    # Server RPC
+      - "8301:8301"    # Serf LAN
+      - "8302:8302"    # Serf WAN
     volumes:
       - ./consul/consul.hcl:/consul/config/consul.hcl:ro
       - consul-data:/consul/data
@@ -64,30 +64,24 @@ services:
       - 'consul'
       - 'agent'
       - '-config-file=/consul/config/consul.hcl'
-    networks:
-      - dokploy-network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.consul.rule=Host(`consul.0xfutbol.com`)"
-      - "traefik.http.routers.consul.entrypoints=websecure"
-      - "traefik.http.routers.consul.tls.certresolver=letsencrypt"
-      - "traefik.http.services.consul.loadbalancer.server.port=8500"
 
   grafana:
     image: grafana/grafana-oss:latest
     container_name: grafana
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     networks:
       - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Host(`grafana.0xfutbol.com`)"
       - "traefik.http.routers.grafana.entrypoints=websecure"
-      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.grafana.tls.certResolver=letsencrypt"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
-      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-https://grafana.0xfutbol.com}
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=http://localhost/grafana
     volumes:
       - grafana-data:/var/lib/grafana
     depends_on:
@@ -97,29 +91,31 @@ services:
     image: grafana/loki:latest
     container_name: loki
     restart: unless-stopped
+    ports:
+      - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
       - loki-data:/loki
       - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
-    networks:
-      - dokploy-network
 
   metabase:
     image: metabase/metabase:latest
     container_name: metabase
     restart: unless-stopped
+    ports:
+      - "3030:3000"
     networks:
       - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.metabase.rule=Host(`metabase.0xfutbol.com`)"
       - "traefik.http.routers.metabase.entrypoints=websecure"
-      - "traefik.http.routers.metabase.tls.certresolver=letsencrypt"
-      - "traefik.http.services.metabase.loadbalancer.server.port=3000"
+      - "traefik.http.routers.metabase.tls.certResolver=letsencrypt"
+      - "traefik.http.services.metabase.loadbalancer.server.port=3030"
     environment:
       - MB_DB_TYPE=${MB_DB_TYPE:-postgres}
       - MB_DB_CONNECTION_URI=${MB_DB_CONNECTION_URI}
-      - MB_SITE_URL=${MB_SITE_URL:-https://metabase.0xfutbol.com}
+      - MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
     volumes:
       - metabase-data:/metabase.db
 
@@ -127,6 +123,8 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
+    ports:
+      - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -139,27 +137,19 @@ services:
       - '--web.enable-lifecycle'
       - '--web.external-url=http://localhost/prometheus/'
       - '--web.route-prefix=/'
-    networks:
-      - dokploy-network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.prometheus.rule=Host(`prometheus.0xfutbol.com`)"
-      - "traefik.http.routers.prometheus.entrypoints=websecure"
-      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
-      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
 
   promtail:
     image: grafana/promtail:latest
     container_name: promtail
     restart: unless-stopped
+    ports:
+      - "9080:9080"
     volumes:
       - /var/log:/var/log:ro
       - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
     command: -config.file=/etc/promtail/config.yaml
     depends_on:
       - loki
-    networks:
-      - dokploy-network
 
   sentry-cron:
     image: getsentry/sentry:latest
@@ -180,7 +170,7 @@ services:
       SENTRY_MAIL_PASSWORD: ${SENTRY_MAIL_PASSWORD}
       SENTRY_MAIL_USE_TLS: ${SENTRY_MAIL_USE_TLS:-false}
       SENTRY_SERVER_EMAIL: ${SENTRY_SERVER_EMAIL:-sentry@localhost}
-      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-https://sentry.0xfutbol.com}
+      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-http://localhost/sentry}
       SENTRY_ALLOWED_HOSTS: ${SENTRY_ALLOWED_HOSTS:-localhost,127.0.0.1}
       SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
     volumes:
@@ -190,8 +180,6 @@ services:
       - sentry-postgres
       - sentry-redis
     command: run cron
-    networks:
-      - dokploy-network
 
   sentry-postgres:
     image: postgres:15-alpine
@@ -203,8 +191,6 @@ services:
       POSTGRES_PASSWORD: ${SENTRY_DB_PASSWORD:-sentry}
     volumes:
       - sentry-postgres:/var/lib/postgresql/data
-    networks:
-      - dokploy-network
 
   sentry-redis:
     image: redis:7-alpine
@@ -212,13 +198,13 @@ services:
     restart: unless-stopped
     volumes:
       - sentry-redis:/data
-    networks:
-      - dokploy-network
 
   sentry-web:
     image: getsentry/sentry:latest
     container_name: sentry-web
     restart: unless-stopped
+    ports:
+      - "9000:9000"
     environment:
       SENTRY_SECRET_KEY: ${SENTRY_SECRET_KEY}
       SENTRY_POSTGRES_HOST: sentry-postgres
@@ -234,9 +220,17 @@ services:
       SENTRY_MAIL_PASSWORD: ${SENTRY_MAIL_PASSWORD}
       SENTRY_MAIL_USE_TLS: ${SENTRY_MAIL_USE_TLS:-false}
       SENTRY_SERVER_EMAIL: ${SENTRY_SERVER_EMAIL:-sentry@localhost}
-      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-https://sentry.0xfutbol.com}
+      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-http://localhost/sentry}
       SENTRY_ALLOWED_HOSTS: ${SENTRY_ALLOWED_HOSTS:-localhost,127.0.0.1}
       SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sentry-web.rule=Host(`sentry.0xfutbol.com`)"
+      - "traefik.http.routers.sentry-web.entrypoints=websecure"
+      - "traefik.http.routers.sentry-web.tls.certResolver=letsencrypt"
+      - "traefik.http.services.sentry-web.loadbalancer.server.port=9000"
     volumes:
       - ./sentry/sentry.conf.py:/etc/sentry/sentry.conf.py:ro
       - sentry-data:/var/lib/sentry/files
@@ -244,8 +238,6 @@ services:
       - sentry-postgres
       - sentry-redis
     command: run web
-    networks:
-      - dokploy-network
 
   sentry-worker:
     image: getsentry/sentry:latest
@@ -266,7 +258,7 @@ services:
       SENTRY_MAIL_PASSWORD: ${SENTRY_MAIL_PASSWORD}
       SENTRY_MAIL_USE_TLS: ${SENTRY_MAIL_USE_TLS:-false}
       SENTRY_SERVER_EMAIL: ${SENTRY_SERVER_EMAIL:-sentry@localhost}
-      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-https://sentry.0xfutbol.com}
+      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-http://localhost/sentry}
       SENTRY_ALLOWED_HOSTS: ${SENTRY_ALLOWED_HOSTS:-localhost,127.0.0.1}
       SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
     volumes:
@@ -276,8 +268,6 @@ services:
       - sentry-postgres
       - sentry-redis
     command: run worker
-    networks:
-      - dokploy-network
 
 networks:
   dokploy-network:
