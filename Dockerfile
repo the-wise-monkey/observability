@@ -5,5 +5,5 @@ RUN apk add --no-cache docker-cli-compose
 COPY . /observability
 
 WORKDIR /observability
-ENV DOCKER_HOST=tcp://127.0.0.1:2375
-CMD ["docker", "compose", "up", "-d"] 
+
+CMD ["/bin/sh", "-c", "dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 & until docker info > /dev/null 2>&1; do sleep 1; done; docker compose up -d"] 
