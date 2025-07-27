@@ -71,6 +71,14 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.0xfutbol.com`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certResolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SERVER_ROOT_URL=http://localhost/grafana
@@ -96,6 +104,14 @@ services:
     restart: unless-stopped
     ports:
       - "3030:3000"
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.metabase.rule=Host(`metabase.0xfutbol.com`)"
+      - "traefik.http.routers.metabase.entrypoints=websecure"
+      - "traefik.http.routers.metabase.tls.certResolver=letsencrypt"
+      - "traefik.http.services.metabase.loadbalancer.server.port=3030"
     environment:
       - MB_DB_TYPE=${MB_DB_TYPE:-postgres}
       - MB_DB_CONNECTION_URI=${MB_DB_CONNECTION_URI}
@@ -207,6 +223,14 @@ services:
       SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-http://localhost/sentry}
       SENTRY_ALLOWED_HOSTS: ${SENTRY_ALLOWED_HOSTS:-localhost,127.0.0.1}
       SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sentry-web.rule=Host(`sentry.0xfutbol.com`)"
+      - "traefik.http.routers.sentry-web.entrypoints=websecure"
+      - "traefik.http.routers.sentry-web.tls.certResolver=letsencrypt"
+      - "traefik.http.services.sentry-web.loadbalancer.server.port=9000"
     volumes:
       - ./sentry/sentry.conf.py:/etc/sentry/sentry.conf.py:ro
       - sentry-data:/var/lib/sentry/files
@@ -244,6 +268,10 @@ services:
       - sentry-postgres
       - sentry-redis
     command: run worker
+
+networks:
+  dokploy-network:
+    external: true
 
 volumes:
   consul-data:
