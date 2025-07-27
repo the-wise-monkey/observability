@@ -103,6 +103,19 @@ services:
     volumes:
       - metabase-data:/metabase.db
 
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - blackbox-exporter
+      - consul
+      - grafana
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus

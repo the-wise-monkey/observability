@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Colors for better UX
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+ENV_FILE=".env"
+SERVICE_NAME="observability"
+
+# Function to print colored header
+print_header() {
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN}     Observability Stack Manager       ${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo
+}
+
+# Function to prompt for env vars (from original setup.sh)
+create_env() {
+    echo -e "${GREEN}Creating .env file...${NC}"
+    echo
+    
+    # Grafana configuration
+    echo -e "${BLUE}=== Grafana Configuration ===${NC}"
+    echo -e "${YELLOW}Grafana will use default configuration.${NC}"
+    echo
+    
+    # Metabase configuration
+    echo -e "${BLUE}=== Metabase Configuration ===${NC}"
+    read -p "Enter Metabase Database connection URI: " MB_DB_CONNECTION_URI
+    read -p "Enter Metabase Site URL (default: http://localhost/metabase): " MB_SITE_URL
+    MB_SITE_URL=${MB_SITE_URL:-http://localhost/metabase}
+    echo
+    
+    # Sentry configuration
+    echo -e "${BLUE}=== Sentry Configuration ===${NC}"
+    echo -e "${YELLOW}Generating Sentry secret key...${NC}"
+    SENTRY_SECRET_KEY=$(openssl rand -base64 32)
+    echo -e "${GREEN}Sentry secret key generated.${NC}"
+    echo
+    
+    read -p "Enter Sentry database password (default: sentry): " SENTRY_DB_PASSWORD
+    SENTRY_DB_PASSWORD=${SENTRY_DB_PASSWORD:-sentry}
+    
+    read -p "Enter Sentry mail host (default: localhost): " SENTRY_MAIL_HOST
+    SENTRY_MAIL_HOST=${SENTRY_MAIL_HOST:-localhost}
+    
+    read -p "Enter Sentry mail port (default: 25): " SENTRY_MAIL_PORT
+    SENTRY_MAIL_PORT=${SENTRY_MAIL_PORT:-25}
+    
+    read -p "Enter Sentry mail username (optional): " SENTRY_MAIL_USERNAME
+    read -p "Enter Sentry mail password (optional): " SENTRY_MAIL_PASSWORD
+    read -p "Enter Sentry server email (default: sentry@localhost): " SENTRY_SERVER_EMAIL
+    SENTRY_SERVER_EMAIL=${SENTRY_SERVER_EMAIL:-sentry@localhost}
+    
+    read -p "Use TLS for mail? (y/N): " SENTRY_MAIL_USE_TLS
+    SENTRY_MAIL_USE_TLS=${SENTRY_MAIL_USE_TLS:-false}
+    
+    read -p "Enable Sentry debug mode? (y/N): " SENTRY_DEBUG
+    SENTRY_DEBUG=${SENTRY_DEBUG:-false}
+    echo
+    
+
+    
+    # Write to .env file
+    {
+        echo "# Metabase Configuration"
+        echo "MB_DB_CONNECTION_URI=\"$MB_DB_CONNECTION_URI\""
+        echo "MB_SITE_URL=\"$MB_SITE_URL\""
+        echo
+        echo "# Sentry Configuration"
+        echo "SENTRY_SECRET_KEY=\"$SENTRY_SECRET_KEY\""
+        echo "SENTRY_DB_PASSWORD=\"$SENTRY_DB_PASSWORD\""
+        echo "SENTRY_MAIL_HOST=\"$SENTRY_MAIL_HOST\""
+        echo "SENTRY_MAIL_PORT=\"$SENTRY_MAIL_PORT\""
+        echo "SENTRY_MAIL_USERNAME=\"$SENTRY_MAIL_USERNAME\""
+        echo "SENTRY_MAIL_PASSWORD=\"$SENTRY_MAIL_PASSWORD\""
+        echo "SENTRY_MAIL_USE_TLS=\"$SENTRY_MAIL_USE_TLS\""
+        echo "SENTRY_SERVER_EMAIL=\"$SENTRY_SERVER_EMAIL\""
+        echo "SENTRY_DEBUG=\"$SENTRY_DEBUG\""
+        echo
+
+    } > "$ENV_FILE"
+    echo -e "${GREEN}.env file created.${NC}"
+}
+
+# Function to set up systemd service (from original setup.sh)
+setup_systemd_service() {
+    echo -e "${BLUE}Setting up systemd service...${NC}"
+    
+    # Create systemd service file
+    SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+
+    sudo bash -c "cat > $SERVICE_FILE" <<EOL
+[Unit]
+Description=Observability Docker Compose Stack
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$(pwd)
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=600
+StartLimitBurst=3
+EnvironmentFile=$(pwd)/.env
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+    echo -e "${BLUE}Reloading systemd daemon and enabling service...${NC}"
+    sudo systemctl daemon-reload
+    sudo systemctl enable $SERVICE_NAME
+    sudo systemctl restart $SERVICE_NAME
+
+    # Get public IP
+    PUBLIC_IP=$(curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip || echo "<your-ipv4>")
+
+    # Print access URLs
+    cat <<EOF
+
+${GREEN}Service $SERVICE_NAME is set up and running.${NC}
+
+${CYAN}Access your services at:${NC}
+  ${YELLOW}Grafana:   http://$PUBLIC_IP/grafana${NC}
+  ${YELLOW}Metabase:  http://$PUBLIC_IP/metabase${NC}
+EOF
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Main menu for existing setup
+main_menu() {
+    while true; do
+        print_header
+        echo -e "${CYAN}Configuration Options:${NC}"
+        echo -e "${GREEN}1.${NC} Exit"
+        echo
+        
+        read -p "Enter your choice (1): " main_choice
+        echo
+        
+        case $main_choice in
+            1)
+                echo -e "${GREEN}Goodbye!${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Please select 1.${NC}"
+                echo
+                ;;
+        esac
+    done
+}
+
+# Initial setup workflow
+initial_setup() {
+    print_header
+    echo -e "${YELLOW}Welcome! This appears to be your first time running the Observability Stack.${NC}"
+    echo -e "${YELLOW}Let's set up your environment...${NC}"
+    echo
+    
+    # Create .env file
+    create_env
+    echo
+    
+    # Set up systemd service
+    setup_systemd_service
+    echo
+    
+    echo -e "${GREEN}Initial setup completed successfully!${NC}"
+    echo -e "${BLUE}You can run this script again to manage your configuration.${NC}"
+    echo
+}
+
+
+
+# Main execution logic
+main() {
+    clear
+    
+    # Check if .env file exists
+    if [ ! -f "$ENV_FILE" ]; then
+        # First run - do initial setup
+        initial_setup
+    else
+        # .env exists - source it for environment variables and show main menu
+        echo -e "${BLUE}Loading environment variables from .env file...${NC}"
+        set -a  # automatically export all variables
+        source "$ENV_FILE"
+        set +a  # stop automatically exporting
+        main_menu
+    fi
+}
+
+# Start the script
+main 
