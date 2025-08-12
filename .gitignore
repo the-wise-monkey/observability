@@ -1,6 +1,5 @@
 # Data directories
 loki/data/
-sentry/data/
 
 # Environment files
 .env

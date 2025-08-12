@@ -10,7 +10,6 @@
 # - Blackbox Exporter (endpoint monitoring)
 # - Nginx (reverse proxy)
 # - Metabase (business intelligence)
-# - Sentry (error tracking and performance monitoring)
 #
 # Usage:
 #   docker compose up -d           # Start all services
@@ -26,12 +25,6 @@
 #   8500  - Consul (http://localhost/consul)
 #   9080  - Promtail (log collection)
 #   9090  - Prometheus (http://localhost/prometheus)
-#   9115  - Blackbox Exporter (http://localhost/blackbox)
-#   9000  - Sentry Web (http://localhost/sentry)
-#   9001  - Sentry Worker
-#   9002  - Sentry Cron
-#   5432  - PostgreSQL (Sentry database)
-#   6379  - Redis (Sentry cache/queue)
 #
 # =========================================
 
@@ -148,122 +141,9 @@ services:
     depends_on:
       - loki
 
-  sentry-cron:
-    image: getsentry/sentry:latest
-    container_name: sentry-cron
-    restart: unless-stopped
-    environment:
-      SENTRY_SECRET_KEY: ${SENTRY_SECRET_KEY}
-      SENTRY_POSTGRES_HOST: sentry-postgres
-      SENTRY_POSTGRES_PORT: 5432
-      SENTRY_DB_NAME: sentry
-      SENTRY_DB_USER: sentry
-      SENTRY_DB_PASSWORD: ${SENTRY_DB_PASSWORD:-sentry}
-      SENTRY_REDIS_HOST: sentry-redis
-      SENTRY_REDIS_PORT: 6379
-      SENTRY_MAIL_HOST: ${SENTRY_MAIL_HOST:-localhost}
-      SENTRY_MAIL_PORT: ${SENTRY_MAIL_PORT:-25}
-      SENTRY_MAIL_USERNAME: ${SENTRY_MAIL_USERNAME}
-      SENTRY_MAIL_PASSWORD: ${SENTRY_MAIL_PASSWORD}
-      SENTRY_MAIL_USE_TLS: ${SENTRY_MAIL_USE_TLS:-false}
-      SENTRY_SERVER_EMAIL: ${SENTRY_SERVER_EMAIL:-sentry@localhost}
-      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-http://localhost/sentry}
-      SENTRY_ALLOWED_HOSTS: ${SENTRY_ALLOWED_HOSTS:-localhost,127.0.0.1}
-      SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
-    volumes:
-      - ./sentry/sentry.conf.py:/etc/sentry/sentry.conf.py:ro
-      - sentry-data:/var/lib/sentry/files
-    depends_on:
-      - sentry-postgres
-      - sentry-redis
-    command: run cron
-
-  sentry-postgres:
-    image: postgres:15-alpine
-    container_name: sentry-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: sentry
-      POSTGRES_USER: sentry
-      POSTGRES_PASSWORD: ${SENTRY_DB_PASSWORD:-sentry}
-    volumes:
-      - sentry-postgres:/var/lib/postgresql/data
-
-  sentry-redis:
-    image: redis:7-alpine
-    container_name: sentry-redis
-    restart: unless-stopped
-    volumes:
-      - sentry-redis:/data
-
-  sentry-web:
-    image: getsentry/sentry:latest
-    container_name: sentry-web
-    restart: unless-stopped
-    ports:
-      - "9000:9000"
-    environment:
-      SENTRY_SECRET_KEY: ${SENTRY_SECRET_KEY}
-      SENTRY_POSTGRES_HOST: sentry-postgres
-      SENTRY_POSTGRES_PORT: 5432
-      SENTRY_DB_NAME: sentry
-      SENTRY_DB_USER: sentry
-      SENTRY_DB_PASSWORD: ${SENTRY_DB_PASSWORD:-sentry}
-      SENTRY_REDIS_HOST: sentry-redis
-      SENTRY_REDIS_PORT: 6379
-      SENTRY_MAIL_HOST: ${SENTRY_MAIL_HOST:-localhost}
-      SENTRY_MAIL_PORT: ${SENTRY_MAIL_PORT:-25}
-      SENTRY_MAIL_USERNAME: ${SENTRY_MAIL_USERNAME}
-      SENTRY_MAIL_PASSWORD: ${SENTRY_MAIL_PASSWORD}
-      SENTRY_MAIL_USE_TLS: ${SENTRY_MAIL_USE_TLS:-false}
-      SENTRY_SERVER_EMAIL: ${SENTRY_SERVER_EMAIL:-sentry@localhost}
-      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-http://localhost/sentry}
-      SENTRY_ALLOWED_HOSTS: ${SENTRY_ALLOWED_HOSTS:-localhost,127.0.0.1}
-      SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
-    volumes:
-      - ./sentry/sentry.conf.py:/etc/sentry/sentry.conf.py:ro
-      - sentry-data:/var/lib/sentry/files
-    depends_on:
-      - sentry-postgres
-      - sentry-redis
-    command: run web
-
-  sentry-worker:
-    image: getsentry/sentry:latest
-    container_name: sentry-worker
-    restart: unless-stopped
-    environment:
-      SENTRY_SECRET_KEY: ${SENTRY_SECRET_KEY}
-      SENTRY_POSTGRES_HOST: sentry-postgres
-      SENTRY_POSTGRES_PORT: 5432
-      SENTRY_DB_NAME: sentry
-      SENTRY_DB_USER: sentry
-      SENTRY_DB_PASSWORD: ${SENTRY_DB_PASSWORD:-sentry}
-      SENTRY_REDIS_HOST: sentry-redis
-      SENTRY_REDIS_PORT: 6379
-      SENTRY_MAIL_HOST: ${SENTRY_MAIL_HOST:-localhost}
-      SENTRY_MAIL_PORT: ${SENTRY_MAIL_PORT:-25}
-      SENTRY_MAIL_USERNAME: ${SENTRY_MAIL_USERNAME}
-      SENTRY_MAIL_PASSWORD: ${SENTRY_MAIL_PASSWORD}
-      SENTRY_MAIL_USE_TLS: ${SENTRY_MAIL_USE_TLS:-false}
-      SENTRY_SERVER_EMAIL: ${SENTRY_SERVER_EMAIL:-sentry@localhost}
-      SENTRY_URL_PREFIX: ${SENTRY_URL_PREFIX:-http://localhost/sentry}
-      SENTRY_ALLOWED_HOSTS: ${SENTRY_ALLOWED_HOSTS:-localhost,127.0.0.1}
-      SENTRY_DEBUG: ${SENTRY_DEBUG:-false}
-    volumes:
-      - ./sentry/sentry.conf.py:/etc/sentry/sentry.conf.py:ro
-      - sentry-data:/var/lib/sentry/files
-    depends_on:
-      - sentry-postgres
-      - sentry-redis
-    command: run worker
-
 volumes:
   consul-data:
   grafana-data:
   loki-data:
   metabase-data:
   prometheus-data:
-  sentry-data:
-  sentry-postgres:
-  sentry-redis:

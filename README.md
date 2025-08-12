@@ -31,21 +31,9 @@ A comprehensive, production-ready observability and monitoring platform built wi
          │    Promtail     │  │       │    Metabase     │    │
          │  (Port 9080)    │  │       │  (Port 3030)    │────┘
          │ Log Collection  │  │       │   Analytics     │
-         └─────────────────┘  │       └─────────────────┘
+                   └─────────────────┘  │       └─────────────────┘
                               │
-         ┌─────────────────┐  │       ┌─────────────────┐
-         │     Sentry      │  │       │   PostgreSQL    │
-         │  (Port 9000)    │  │       │  (Port 5432)    │
-         │ Error Tracking  │  │       │   Database      │
-         └─────────────────┘  │       └─────────────────┘
-                              │
-         ┌─────────────────┐  │       ┌─────────────────┐
-         │     Redis       │  │       │   Sentry Cron   │
-         │  (Port 6379)    │  │       │  (Port 9002)    │
-         │   Cache/Queue   │  │       │  Background     │
-         └─────────────────┘  │       └─────────────────┘
-                              │
-                    ┌─────────┴───────┐
+                     ┌─────────┴───────┐
                     │                 │
               External Systems    Host Logs
               (via Consul SD)     (/var/log)
@@ -59,9 +47,6 @@ A comprehensive, production-ready observability and monitoring platform built wi
 - **Promtail** → Collects host logs and forwards to Loki
 - **Consul** → Provides service discovery for Prometheus + Blackbox monitoring
 - **Blackbox** → Monitors endpoints discovered via Consul
-- **Sentry** → Collects error reports and performance data from applications
-- **PostgreSQL** → Stores Sentry data and configuration
-- **Redis** → Provides caching and queue management for Sentry
 
 ## 🔧 Components
 
@@ -75,10 +60,6 @@ A comprehensive, production-ready observability and monitoring platform built wi
 - **[Metabase](https://www.metabase.com/)** - Business intelligence and analytics
 - **[Nginx](https://nginx.org/)** - Reverse proxy for unified web access
 
-### Error Tracking & Performance
-- **[Sentry](https://sentry.io/)** - Error tracking, performance monitoring, and release tracking
-- **[PostgreSQL](https://www.postgresql.org/)** - Database for Sentry data storage
-- **[Redis](https://redis.io/)** - Caching and queue management for Sentry
 
 ### Service Discovery & Health
 - **[Blackbox Exporter](https://github.com/prometheus/blackbox_exporter)** - HTTP/TCP/ICMP endpoint monitoring
@@ -117,7 +98,6 @@ A comprehensive, production-ready observability and monitoring platform built wi
    - **Grafana**: `http://your-server/grafana` (admin/admin)
    - **Metabase**: `http://your-server/metabase`
    - **Prometheus**: `http://your-server/prometheus`
-   - **Sentry**: `http://your-server/sentry`
 
 ## 📁 Project Structure
 
@@ -134,8 +114,6 @@ observability/
 │   └── prometheus.yml          # Scrape configs & service discovery
 ├── 📂 promtail/                 # Log collection
 │   └── promtail-config.yaml    # Log scraping configuration
-├── 📂 sentry/                   # Error tracking configuration
-│   └── sentry.conf.py          # Sentry server configuration
 ├── 🐳 docker-compose.yml        # Container orchestration
 ├── 🌐 nginx.conf               # Reverse proxy configuration
 ├── 🔧 manage                   # Setup and management script
@@ -151,17 +129,6 @@ Configuration is managed through `.env` file (created during setup):
 # Metabase Configuration
 MB_DB_CONNECTION_URI="your-database-connection"
 MB_SITE_URL="http://your-server/metabase"
-
-# Sentry Configuration
-SENTRY_SECRET_KEY="your-secret-key"
-SENTRY_DB_PASSWORD="sentry"
-SENTRY_MAIL_HOST="localhost"
-SENTRY_MAIL_PORT="25"
-SENTRY_MAIL_USERNAME=""
-SENTRY_MAIL_PASSWORD=""
-SENTRY_MAIL_USE_TLS="false"
-SENTRY_SERVER_EMAIL="sentry@localhost"
-SENTRY_DEBUG="false"
 ```
 
 ### Service Discovery
@@ -233,7 +200,6 @@ docker compose restart [service-name]
 ### Default Credentials
 - **Consul**: No authentication (development mode)
 - **Grafana**: admin/admin (change on first login)
-- **Sentry**: Create admin user on first access
 
 ### Production Hardening
 For production deployment:
@@ -251,7 +217,6 @@ For production deployment:
 - **Business metrics**: Custom KPIs via Metabase
 - **Infrastructure metrics**: CPU, memory, disk, network
 - **Log analysis**: Error rates, log volumes
-- **Error tracking**: Application errors and performance issues
 
 ### Custom Dashboards
 Create custom Grafana dashboards for:
@@ -259,7 +224,6 @@ Create custom Grafana dashboards for:
 - Business KPIs
 - Custom alerting rules
 - SLA monitoring
-- Error tracking and performance metrics
 
 ## 🤝 Contributing
 
