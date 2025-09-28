@@ -91,13 +91,15 @@ A comprehensive, production-ready observability and monitoring platform built wi
    - Systemd integration (optional)
 
 3. **Access the services**
-   
-   Once running, access your services at:
-   - **Blackbox**: `http://your-server/blackbox`
-   - **Consul**: `http://your-server/consul`
-   - **Grafana**: `http://your-server/grafana` (admin/admin)
-   - **Metabase**: `http://your-server/metabase`
-   - **Prometheus**: `http://your-server/prometheus`
+  
+  Once running, access your services at:
+  - **Blackbox**: `http://your-server/blackbox/`
+  - **Consul**: `http://your-server/consul/`
+  - **Grafana**: `http://your-server/grafana/` (admin/admin)
+  - **Metabase**: `http://your-server/metabase/`
+  - **Prometheus**: `http://your-server/prometheus/`
+  
+  Note: URLs require a trailing slash due to Nginx path-based routing.
 
 ## 📁 Project Structure
 
@@ -119,6 +121,21 @@ observability/
 ├── 🔧 manage                   # Setup and management script
 └── 📋 README.md               # This file
 ```
+
+## 💾 Data Persistence
+
+Named volumes are used for persistent data (preferred over bind mounts):
+
+```
+volumes:
+  consul-data:
+  grafana-data:
+  loki-data:
+  metabase-data:
+  prometheus-data:
+```
+
+Data directories are maintained by Docker; remove with `docker volume rm` if needed.
 
 ## ⚙️ Configuration
 
@@ -153,18 +170,33 @@ Services are automatically registered in Consul with health checks and monitorin
 - **Push API**: Direct log ingestion endpoint
 - **Structured logs**: JSON and key-value parsing
 
+##### Promtail Push API
+Promtail exposes a push API via Nginx at `/promtail/loki/api/v1/push`.
+
+Example curl:
+```bash
+curl -X POST "http://your-server/promtail/loki/api/v1/push" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "streams": [
+      {
+        "stream": {"job": "push_api", "level": "info"},
+        "values": [["'$(date +%s%N)'", "hello from push api"]]
+      }
+    ]
+  }'
+```
+
 #### Metrics Collection
 - **Custom endpoints**: HTTP/TCP probes via Blackbox Exporter
 - **Flexible scraping**: Tag-based service selection
 - **Self-monitoring**: All stack components expose metrics
 - **Service discovery**: Auto-discovery of services via Consul
 
-#### Error Tracking
-- **Real-time error monitoring**: Capture and track application errors
-- **Performance monitoring**: Track application performance metrics
-- **Release tracking**: Monitor error rates across releases
-- **Issue management**: Organize and prioritize error reports
-- **Integration**: Connect with development workflows
+#### Endpoint & Service Monitoring
+- **Real-time uptime**: Blackbox probes (HTTP/TCP/ICMP)
+- **Service health**: Consul-integrated health checks
+- **Infrastructure**: CPU, memory, disk, network via exporters
 
 ## 🛠️ Management
 
@@ -189,10 +221,10 @@ docker compose restart [service-name]
 ./manage
 
 # The script provides:
-# - Initial setup and configuration
-# - Environment variable management
-# - Systemd service integration
-# - Service status monitoring
+# - Initial setup and configuration (creates .env)
+# - Environment variable management (Metabase)
+# - Systemd service integration (optional)
+# - Service access info (Grafana/Metabase URLs)
 ```
 
 ## 🔒 Security Considerations
@@ -204,11 +236,12 @@ docker compose restart [service-name]
 ### Production Hardening
 For production deployment:
 
-1. **Configure Grafana authentication**
-2. **Enable Consul ACLs**
-3. **Implement network segmentation**
-4. **Regular security updates**
-5. **Set up TLS certificates**
+1. **Pin image tags** (avoid `latest`)
+2. **Configure Grafana authentication**
+3. **Enable Consul ACLs**
+4. **Implement network segmentation**
+5. **Regular security updates**
+6. **Set up TLS certificates**
 
 ## 📊 Monitoring Dashboards
 
@@ -227,7 +260,7 @@ Create custom Grafana dashboards for:
 
 ## 🤝 Contributing
 
-1. Follow the coding standards defined in `.cursorrules`
+1. Follow repository standards in `README.md` and project rules
 2. Test changes with the full stack
 3. Update documentation for new features
 4. Ensure backward compatibility
